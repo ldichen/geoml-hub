@@ -1,0 +1,72 @@
+INFO:     Will watch for changes in these directories: ['/Users/liudichen/Documents/project/GeoML-hub/backend']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [80842] using StatReload
+INFO:     Started server process [80845]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  StatReload detected changes in 'app/routers/files.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [80845]
+INFO:     Started server process [80974]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     192.168.1.116:59649 - "OPTIONS /api/repositories?per_page=20&sort_by=updated_at&sort_order=desc HTTP/1.1" 200 OK
+INFO:     192.168.1.116:59650 - "OPTIONS /api/repositories?per_page=8&sort_by=stars_count&sort_order=desc&is_featured=true HTTP/1.1" 200 OK
+INFO:     192.168.1.116:59651 - "OPTIONS /api/classifications/tree HTTP/1.1" 200 OK
+INFO:     192.168.1.116:59651 - "GET /api/repositories?per_page=20&sort_by=updated_at&sort_order=desc HTTP/1.1" 307 Temporary Redirect
+INFO:     192.168.1.116:59649 - "GET /api/repositories?per_page=8&sort_by=stars_count&sort_order=desc&is_featured=true HTTP/1.1" 307 Temporary Redirect
+INFO:     192.168.1.116:59651 - "OPTIONS /api/repositories/?per_page=20&sort_by=updated_at&sort_order=desc HTTP/1.1" 200 OK
+INFO:     192.168.1.116:59649 - "OPTIONS /api/repositories/?per_page=8&sort_by=stars_count&sort_order=desc&is_featured=true HTTP/1.1" 200 OK
+INFO:     192.168.1.116:59650 - "GET /api/classifications/tree HTTP/1.1" 200 OK
+INFO:     192.168.1.116:59651 - "GET /api/repositories/?per_page=8&sort_by=stars_count&sort_order=desc&is_featured=true HTTP/1.1" 200 OK
+INFO:     192.168.1.116:59649 - "GET /api/repositories/?per_page=20&sort_by=updated_at&sort_order=desc HTTP/1.1" 200 OK
+INFO:     192.168.1.116:59649 - "OPTIONS /api/repositories?per_page=10&sort_by=stars_count&sort_order=desc&is_featured=true HTTP/1.1" 200 OK
+INFO:     192.168.1.116:59649 - "GET /api/repositories?per_page=10&sort_by=stars_count&sort_order=desc&is_featured=true HTTP/1.1" 307 Temporary Redirect
+INFO:     192.168.1.116:59649 - "OPTIONS /api/repositories/?per_page=10&sort_by=stars_count&sort_order=desc&is_featured=true HTTP/1.1" 200 OK
+INFO:     192.168.1.116:59649 - "GET /api/repositories/?per_page=10&sort_by=stars_count&sort_order=desc&is_featured=true HTTP/1.1" 200 OK
+INFO:     192.168.1.116:63407 - "OPTIONS /api/repositories?per_page=20&sort_by=updated_at&sort_order=desc HTTP/1.1" 400 Bad Request
+INFO:     192.168.1.116:63408 - "OPTIONS /api/repositories?per_page=8&sort_by=stars_count&sort_order=desc&is_featured=true HTTP/1.1" 400 Bad Request
+INFO:     192.168.1.116:63409 - "OPTIONS /api/classifications/tree HTTP/1.1" 400 Bad Request
+INFO:     192.168.1.116:63409 - "OPTIONS /api/repositories?per_page=10&sort_by=stars_count&sort_order=desc&is_featured=true HTTP/1.1" 400 Bad Request
+INFO:     192.168.1.116:64051 - "OPTIONS /api/repositories?per_page=20&sort_by=updated_at&sort_order=desc HTTP/1.1" 400 Bad Request
+INFO:     192.168.1.116:64052 - "OPTIONS /api/repositories?per_page=8&sort_by=stars_count&sort_order=desc&is_featured=true HTTP/1.1" 400 Bad Request
+INFO:     192.168.1.116:64053 - "OPTIONS /api/classifications/tree HTTP/1.1" 400 Bad Request
+INFO:     192.168.1.116:64053 - "OPTIONS /api/repositories?per_page=10&sort_by=stars_count&sort_order=desc&is_featured=true HTTP/1.1" 400 Bad Request
+INFO:     192.168.1.116:64527 - "GET /api/repositories?per_page=20&sort_by=updated_at&sort_order=desc HTTP/1.1" 307 Temporary Redirect
+INFO:     192.168.1.116:64528 - "GET /api/repositories?per_page=8&sort_by=stars_count&sort_order=desc&is_featured=true HTTP/1.1" 307 Temporary Redirect
+INFO:     192.168.1.116:64530 - "OPTIONS /api/repositories/?per_page=20&sort_by=updated_at&sort_order=desc HTTP/1.1" 400 Bad Request
+INFO:     192.168.1.116:64531 - "OPTIONS /api/repositories/?per_page=8&sort_by=stars_count&sort_order=desc&is_featured=true HTTP/1.1" 400 Bad Request
+INFO:     192.168.1.116:64532 - "GET /api/repositories?per_page=10&sort_by=stars_count&sort_order=desc&is_featured=true HTTP/1.1" 307 Temporary Redirect
+INFO:     192.168.1.116:64531 - "OPTIONS /api/repositories/?per_page=10&sort_by=stars_count&sort_order=desc&is_featured=true HTTP/1.1" 400 Bad Request
+INFO:     192.168.1.116:64529 - "GET /api/classifications/tree HTTP/1.1" 200 OK
+INFO:     192.168.1.116:49720 - "GET /api/repositories?per_page=20&sort_by=updated_at&sort_order=desc HTTP/1.1" 307 Temporary Redirect
+INFO:     192.168.1.116:49721 - "GET /api/repositories?per_page=8&sort_by=stars_count&sort_order=desc&is_featured=true HTTP/1.1" 307 Temporary Redirect
+INFO:     192.168.1.116:49723 - "OPTIONS /api/repositories/?per_page=20&sort_by=updated_at&sort_order=desc HTTP/1.1" 400 Bad Request
+INFO:     192.168.1.116:49724 - "OPTIONS /api/repositories/?per_page=8&sort_by=stars_count&sort_order=desc&is_featured=true HTTP/1.1" 400 Bad Request
+INFO:     192.168.1.116:49725 - "GET /api/repositories?per_page=10&sort_by=stars_count&sort_order=desc&is_featured=true HTTP/1.1" 307 Temporary Redirect
+INFO:     192.168.1.116:49724 - "OPTIONS /api/repositories/?per_page=10&sort_by=stars_count&sort_order=desc&is_featured=true HTTP/1.1" 400 Bad Request
+INFO:     192.168.1.116:49722 - "GET /api/classifications/tree HTTP/1.1" 200 OK
+INFO:     192.168.1.116:49834 - "GET /api/repositories?per_page=20&sort_by=updated_at&sort_order=desc HTTP/1.1" 307 Temporary Redirect
+INFO:     192.168.1.116:49835 - "GET /api/repositories?per_page=8&sort_by=stars_count&sort_order=desc&is_featured=true HTTP/1.1" 307 Temporary Redirect
+INFO:     192.168.1.116:49837 - "OPTIONS /api/repositories/?per_page=20&sort_by=updated_at&sort_order=desc HTTP/1.1" 400 Bad Request
+INFO:     192.168.1.116:49837 - "OPTIONS /api/repositories/?per_page=8&sort_by=stars_count&sort_order=desc&is_featured=true HTTP/1.1" 400 Bad Request
+INFO:     192.168.1.116:49838 - "GET /api/repositories?per_page=10&sort_by=stars_count&sort_order=desc&is_featured=true HTTP/1.1" 307 Temporary Redirect
+INFO:     192.168.1.116:49837 - "OPTIONS /api/repositories/?per_page=10&sort_by=stars_count&sort_order=desc&is_featured=true HTTP/1.1" 400 Bad Request
+INFO:     192.168.1.116:49836 - "GET /api/classifications/tree HTTP/1.1" 200 OK
+INFO:     192.168.1.116:51343 - "GET /api/repositories/?per_page=20&sort_by=updated_at&sort_order=desc HTTP/1.1" 200 OK
+INFO:     192.168.1.116:52045 - "GET /api/repositories?per_page=20&sort_by=updated_at&sort_order=desc HTTP/1.1" 307 Temporary Redirect
+INFO:     192.168.1.116:52047 - "GET /api/repositories?per_page=8&sort_by=stars_count&sort_order=desc&is_featured=true HTTP/1.1" 307 Temporary Redirect
+INFO:     192.168.1.116:52048 - "OPTIONS /api/repositories/?per_page=20&sort_by=updated_at&sort_order=desc HTTP/1.1" 400 Bad Request
+INFO:     192.168.1.116:52049 - "OPTIONS /api/repositories/?per_page=8&sort_by=stars_count&sort_order=desc&is_featured=true HTTP/1.1" 400 Bad Request
+INFO:     192.168.1.116:52050 - "GET /api/repositories?per_page=10&sort_by=stars_count&sort_order=desc&is_featured=true HTTP/1.1" 307 Temporary Redirect
+INFO:     192.168.1.116:52049 - "OPTIONS /api/repositories/?per_page=10&sort_by=stars_count&sort_order=desc&is_featured=true HTTP/1.1" 400 Bad Request
+INFO:     192.168.1.116:52046 - "GET /api/classifications/tree HTTP/1.1" 200 OK
+INFO:     192.168.1.116:52276 - "GET /api/repositories?per_page=20&sort_by=updated_at&sort_order=desc HTTP/1.1" 307 Temporary Redirect
+INFO:     192.168.1.116:52277 - "GET /api/repositories?per_page=8&sort_by=stars_count&sort_order=desc&is_featured=true HTTP/1.1" 307 Temporary Redirect
+INFO:     192.168.1.116:52279 - "OPTIONS /api/repositories/?per_page=20&sort_by=updated_at&sort_order=desc HTTP/1.1" 400 Bad Request
+INFO:     192.168.1.116:52280 - "OPTIONS /api/repositories/?per_page=8&sort_by=stars_count&sort_order=desc&is_featured=true HTTP/1.1" 400 Bad Request
+INFO:     192.168.1.116:52281 - "GET /api/repositories?per_page=10&sort_by=stars_count&sort_order=desc&is_featured=true HTTP/1.1" 307 Temporary Redirect
+INFO:     192.168.1.116:52280 - "OPTIONS /api/repositories/?per_page=10&sort_by=stars_count&sort_order=desc&is_featured=true HTTP/1.1" 400 Bad Request
+INFO:     192.168.1.116:52278 - "GET /api/classifications/tree HTTP/1.1" 200 OK

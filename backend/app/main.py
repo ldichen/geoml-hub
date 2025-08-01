@@ -1,0 +1,95 @@
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from app.config import settings
+from app.routers import auth, classifications, users, repositories, search, admin, files, metadata, discover, system, file_editor, personal_files, services
+from app.middleware.error_handler import add_exception_handlers
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=getattr(logging, settings.log_level.upper()),
+    format=settings.log_format,
+)
+
+logger = logging.getLogger(__name__)
+
+# Create FastAPI app
+app = FastAPI(
+    title="GeoML-Hub API v2.0",
+    description="地理科学机器学习模型仓库平台 API - Hugging Face 风格架构",
+    version="2.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=True,
+    allow_methods=settings.cors_methods,
+    allow_headers=settings.cors_headers,
+)
+
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Add exception handlers
+add_exception_handlers(app)
+
+# Include routers
+app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
+app.include_router(classifications.router, prefix="/api/classifications", tags=["classifications"])
+# v2.0 核心路由
+app.include_router(users.router, prefix="/api/users", tags=["users"])
+app.include_router(repositories.router, prefix="/api/repositories", tags=["repositories"])
+# 搜索和发现
+app.include_router(search.router, prefix="/api/search", tags=["search"])
+# 顶级发现端点
+app.include_router(discover.router, prefix="/api", tags=["discover"])
+# 文件管理
+app.include_router(files.router, prefix="/api/files", tags=["files"])
+# 个人文件空间
+app.include_router(personal_files.router, tags=["personal-files"])
+# 文件编辑与版本控制
+app.include_router(file_editor.router, prefix="/api", tags=["file-editor"])
+# 元数据管理
+app.include_router(metadata.router, prefix="/api/metadata", tags=["metadata"])
+# 系统管理
+app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
+# 系统配置
+app.include_router(system.router, prefix="/api/system", tags=["system"])
+# 模型服务管理
+app.include_router(services.router, tags=["services"])
+
+
+@app.get("/")
+async def root():
+    """Root endpoint"""
+    return {
+        "message": "Welcome to GeoML-Hub API v2.0",
+        "description": "地理科学机器学习模型仓库平台 - Hugging Face 风格架构",
+        "version": "2.0.0",
+        "features": [
+            "用户个人空间与仓库管理",
+            "JWT认证与外部认证集成",
+            "社交功能（点赞、关注、收藏）",
+            "README.md 驱动的元数据解析",
+            "MinIO 对象存储与大文件分片上传",
+            "三级分类体系与全文搜索",
+            "趋势发现与搜索建议",
+            "系统管理与监控面板"
+        ]
+    }
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {"status": "healthy", "service": "GeoML-Hub API"}
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)

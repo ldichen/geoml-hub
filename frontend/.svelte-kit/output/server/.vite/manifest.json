@@ -1,0 +1,341 @@
+{
+  ".svelte-kit/generated/server/internal.js": {
+    "file": "internal.js",
+    "imports": [
+      "_internal.js"
+    ],
+    "isEntry": true,
+    "src": ".svelte-kit/generated/server/internal.js"
+  },
+  "RepositoryCard.css": {
+    "file": "_app/immutable/assets/RepositoryCard.43cb8110.css",
+    "src": "RepositoryCard.css"
+  },
+  "_Loading.js": {
+    "file": "chunks/Loading.js",
+    "imports": [
+      "_utils.js",
+      "_ssr.js",
+      "_runtime.esm.js"
+    ]
+  },
+  "_RepositoryCard.js": {
+    "css": [
+      "_app/immutable/assets/RepositoryCard.43cb8110.css"
+    ],
+    "file": "chunks/RepositoryCard.js",
+    "imports": [
+      "_ssr.js",
+      "_star.js",
+      "_utils.js",
+      "_runtime.esm.js",
+      "_api.js"
+    ]
+  },
+  "_api.js": {
+    "file": "chunks/api.js",
+    "imports": [
+      "_false.js"
+    ]
+  },
+  "_auth.js": {
+    "file": "chunks/auth.js",
+    "imports": [
+      "_index.js"
+    ]
+  },
+  "_auth2.js": {
+    "file": "chunks/auth2.js",
+    "imports": [
+      "_utils.js",
+      "_auth.js"
+    ]
+  },
+  "_false.js": {
+    "file": "chunks/false.js"
+  },
+  "_filter.js": {
+    "file": "chunks/filter.js",
+    "imports": [
+      "_ssr.js",
+      "_star.js"
+    ]
+  },
+  "_index.js": {
+    "file": "chunks/index.js",
+    "imports": [
+      "_utils.js"
+    ]
+  },
+  "_index2.js": {
+    "dynamicImports": [
+      "src/lib/i18n/locales/en-US.json",
+      "src/lib/i18n/locales/zh-CN.json"
+    ],
+    "file": "chunks/index2.js",
+    "imports": [
+      "_runtime.esm.js"
+    ]
+  },
+  "_internal.js": {
+    "file": "chunks/internal.js",
+    "imports": [
+      "_ssr.js"
+    ]
+  },
+  "_runtime.esm.js": {
+    "file": "chunks/runtime.esm.js",
+    "imports": [
+      "_index.js"
+    ]
+  },
+  "_ssr.js": {
+    "file": "chunks/ssr.js",
+    "imports": [
+      "_utils.js"
+    ]
+  },
+  "_star.js": {
+    "file": "chunks/star.js",
+    "imports": [
+      "_ssr.js",
+      "_utils.js"
+    ]
+  },
+  "_stores.js": {
+    "file": "chunks/stores.js",
+    "imports": [
+      "_ssr.js"
+    ]
+  },
+  "_trending-up.js": {
+    "file": "chunks/trending-up.js",
+    "imports": [
+      "_ssr.js",
+      "_star.js"
+    ]
+  },
+  "_utils.js": {
+    "file": "chunks/utils.js"
+  },
+  "node_modules/@sveltejs/kit/src/runtime/components/error.svelte": {
+    "file": "entries/fallbacks/error.svelte.js",
+    "imports": [
+      "_utils.js",
+      "_ssr.js",
+      "_stores.js"
+    ],
+    "isEntry": true,
+    "src": "node_modules/@sveltejs/kit/src/runtime/components/error.svelte"
+  },
+  "node_modules/@sveltejs/kit/src/runtime/server/index.js": {
+    "file": "index.js",
+    "imports": [
+      "_false.js",
+      "_internal.js",
+      "_index.js"
+    ],
+    "isEntry": true,
+    "src": "node_modules/@sveltejs/kit/src/runtime/server/index.js"
+  },
+  "src/lib/i18n/locales/en-US.json": {
+    "file": "chunks/en-US.js",
+    "isDynamicEntry": true,
+    "src": "src/lib/i18n/locales/en-US.json"
+  },
+  "src/lib/i18n/locales/zh-CN.json": {
+    "file": "chunks/zh-CN.js",
+    "isDynamicEntry": true,
+    "src": "src/lib/i18n/locales/zh-CN.json"
+  },
+  "src/routes/+layout.css": {
+    "file": "_app/immutable/assets/_layout.5152c978.css",
+    "src": "src/routes/+layout.css"
+  },
+  "src/routes/+layout.js": {
+    "file": "entries/pages/_layout.js",
+    "imports": [
+      "_index2.js"
+    ],
+    "isEntry": true,
+    "src": "src/routes/+layout.js"
+  },
+  "src/routes/+layout.svelte": {
+    "css": [
+      "_app/immutable/assets/_layout.5152c978.css"
+    ],
+    "file": "entries/pages/_layout.svelte.js",
+    "imports": [
+      "_utils.js",
+      "_ssr.js",
+      "_index2.js",
+      "_runtime.esm.js",
+      "_auth.js",
+      "_api.js"
+    ],
+    "isEntry": true,
+    "src": "src/routes/+layout.svelte"
+  },
+  "src/routes/+page.css": {
+    "file": "_app/immutable/assets/_page.3777cc8c.css",
+    "src": "src/routes/+page.css"
+  },
+  "src/routes/+page.svelte": {
+    "css": [
+      "_app/immutable/assets/_page.3777cc8c.css"
+    ],
+    "file": "entries/pages/_page.svelte.js",
+    "imports": [
+      "_ssr.js",
+      "_api.js",
+      "_RepositoryCard.js",
+      "_utils.js",
+      "_runtime.esm.js",
+      "_star.js",
+      "_Loading.js",
+      "_trending-up.js"
+    ],
+    "isEntry": true,
+    "src": "src/routes/+page.svelte"
+  },
+  "src/routes/[username]/+page.css": {
+    "file": "_app/immutable/assets/_page.668cffbd.css",
+    "src": "src/routes/[username]/+page.css"
+  },
+  "src/routes/[username]/+page.svelte": {
+    "css": [
+      "_app/immutable/assets/_page.668cffbd.css",
+      "_app/immutable/assets/RepositoryCard.43cb8110.css"
+    ],
+    "file": "entries/pages/_username_/_page.svelte.js",
+    "imports": [
+      "_utils.js",
+      "_ssr.js",
+      "_stores.js",
+      "_api.js",
+      "_runtime.esm.js",
+      "_Loading.js"
+    ],
+    "isEntry": true,
+    "src": "src/routes/[username]/+page.svelte"
+  },
+  "src/routes/[username]/[repository]/+page.css": {
+    "file": "_app/immutable/assets/_page.d88e5f79.css",
+    "src": "src/routes/[username]/[repository]/+page.css"
+  },
+  "src/routes/[username]/[repository]/+page.svelte": {
+    "css": [
+      "_app/immutable/assets/_page.d88e5f79.css"
+    ],
+    "file": "entries/pages/_username_/_repository_/_page.svelte.js",
+    "imports": [
+      "_utils.js",
+      "_ssr.js",
+      "_stores.js",
+      "_runtime.esm.js",
+      "_api.js",
+      "_auth.js",
+      "_auth2.js",
+      "_Loading.js"
+    ],
+    "isEntry": true,
+    "src": "src/routes/[username]/[repository]/+page.svelte"
+  },
+  "src/routes/[username]/[repository]/upload/+page.css": {
+    "file": "_app/immutable/assets/_page.2c95802d.css",
+    "src": "src/routes/[username]/[repository]/upload/+page.css"
+  },
+  "src/routes/[username]/[repository]/upload/+page.svelte": {
+    "css": [
+      "_app/immutable/assets/_page.2c95802d.css"
+    ],
+    "file": "entries/pages/_username_/_repository_/upload/_page.svelte.js",
+    "imports": [
+      "_utils.js",
+      "_ssr.js",
+      "_stores.js",
+      "_runtime.esm.js",
+      "_auth.js",
+      "_auth2.js",
+      "_api.js",
+      "_Loading.js"
+    ],
+    "isEntry": true,
+    "src": "src/routes/[username]/[repository]/upload/+page.svelte"
+  },
+  "src/routes/login/+page.css": {
+    "file": "_app/immutable/assets/_page.d6a1033e.css",
+    "src": "src/routes/login/+page.css"
+  },
+  "src/routes/login/+page.svelte": {
+    "css": [
+      "_app/immutable/assets/_page.d6a1033e.css"
+    ],
+    "file": "entries/pages/login/_page.svelte.js",
+    "imports": [
+      "_utils.js",
+      "_ssr.js",
+      "_api.js",
+      "_runtime.esm.js"
+    ],
+    "isEntry": true,
+    "src": "src/routes/login/+page.svelte"
+  },
+  "src/routes/new/+page.svelte": {
+    "file": "entries/pages/new/_page.svelte.js",
+    "imports": [
+      "_utils.js",
+      "_ssr.js",
+      "_runtime.esm.js",
+      "_api.js",
+      "_auth.js"
+    ],
+    "isEntry": true,
+    "src": "src/routes/new/+page.svelte"
+  },
+  "src/routes/register/+page.svelte": {
+    "file": "entries/pages/register/_page.svelte.js",
+    "imports": [
+      "_utils.js",
+      "_ssr.js",
+      "_api.js",
+      "_runtime.esm.js"
+    ],
+    "isEntry": true,
+    "src": "src/routes/register/+page.svelte"
+  },
+  "src/routes/search/+page.svelte": {
+    "file": "entries/pages/search/_page.svelte.js",
+    "imports": [
+      "_utils.js",
+      "_ssr.js",
+      "_stores.js",
+      "_runtime.esm.js",
+      "_api.js",
+      "_RepositoryCard.js",
+      "_Loading.js",
+      "_star.js",
+      "_filter.js"
+    ],
+    "isEntry": true,
+    "src": "src/routes/search/+page.svelte"
+  },
+  "src/routes/trending/+page.svelte": {
+    "css": [
+      "_app/immutable/assets/RepositoryCard.43cb8110.css"
+    ],
+    "file": "entries/pages/trending/_page.svelte.js",
+    "imports": [
+      "_utils.js",
+      "_ssr.js",
+      "_runtime.esm.js",
+      "_api.js",
+      "_Loading.js",
+      "_trending-up.js",
+      "_filter.js",
+      "_star.js"
+    ],
+    "isEntry": true,
+    "src": "src/routes/trending/+page.svelte"
+  }
+}

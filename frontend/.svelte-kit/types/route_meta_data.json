@@ -1,0 +1,64 @@
+{
+	"/": [
+		"src/routes/+layout.js",
+		"src/routes/+layout.js"
+	],
+	"/admin": [
+		"src/routes/+layout.js",
+		"src/routes/+layout.js"
+	],
+	"/admin/dashboard": [
+		"src/routes/+layout.js"
+	],
+	"/admin/repositories": [
+		"src/routes/+layout.js"
+	],
+	"/admin/settings": [
+		"src/routes/+layout.js"
+	],
+	"/admin/storage": [
+		"src/routes/+layout.js"
+	],
+	"/admin/system": [
+		"src/routes/+layout.js"
+	],
+	"/admin/users": [
+		"src/routes/+layout.js"
+	],
+	"/login": [
+		"src/routes/+layout.js"
+	],
+	"/new": [
+		"src/routes/+layout.js"
+	],
+	"/register": [
+		"src/routes/+layout.js"
+	],
+	"/search": [
+		"src/routes/+layout.js"
+	],
+	"/trending": [
+		"src/routes/+layout.js"
+	],
+	"/[username]": [
+		"src/routes/+layout.js"
+	],
+	"/[username]/[repository]": [
+		"src/routes/+layout.js"
+	],
+	"/[username]/[repository]/blob/[...file_path]": [
+		"src/routes/+layout.js"
+	],
+	"/[username]/[repository]/commits/[...file_path]": [
+		"src/routes/+layout.js"
+	],
+	"/[username]/[repository]/drafts": [
+		"src/routes/+layout.js"
+	],
+	"/[username]/[repository]/edit/[...file_path]": [
+		"src/routes/+layout.js"
+	],
+	"/[username]/[repository]/upload": [
+		"src/routes/+layout.js"
+	]
+}

@@ -1,0 +1,690 @@
+<script>
+  import { createEventDispatcher } from 'svelte';
+  import { X, AlertCircle, Info, Settings, Zap, Shield, Cpu, HardDrive } from 'lucide-svelte';
+
+  export let isOpen = false;
+  export let loading = false;
+
+  const dispatch = createEventDispatcher();
+
+  let formElement;
+  // 资源配置预设
+  const resourceConfigs = {
+    'lightweight': { cpu: '0.1', memory: '128Mi', label: '轻量配置', icon: 'eco', color: 'green' },
+    'recommended': { cpu: '0.3', memory: '256Mi', label: '推荐配置', icon: 'zap', color: 'blue' },
+    'performance': { cpu: '0.5', memory: '512Mi', label: '性能配置', icon: 'rocket', color: 'purple' }
+  };
+
+  // 优先级选项
+  const priorityOptions = [
+    { value: 1, label: '1 (最高)' },
+    { value: 2, label: '2 (默认)' },
+    { value: 3, label: '3 (最低)' }
+  ];
+
+  let formData = {
+    description: '',
+    resource_config: 'recommended', // 资源配置预设选择
+    cpu_limit: '0.3',
+    memory_limit: '256Mi',
+    is_public: false,
+    priority: 2
+  };
+
+  let dockerTarFile = null;
+  let dockerFileInputRef;
+  let examplesFile = null;
+  let fileInputRef;
+
+  let errors = {};
+
+  function handleClose() {
+    if (loading) return;
+    dispatch('close');
+    resetForm();
+  }
+
+  function resetForm() {
+    formData = {
+      description: '',
+      resource_config: 'recommended',
+      cpu_limit: '0.3',
+      memory_limit: '256Mi',
+      is_public: false,
+      priority: 2
+    };
+    errors = {};
+    examplesFile = null;
+    dockerTarFile = null;
+    if (fileInputRef) {
+      fileInputRef.value = '';
+    }
+    if (dockerFileInputRef) {
+      dockerFileInputRef.value = '';
+    }
+  }
+
+  // 处理资源配置变更
+  function handleResourceConfigChange() {
+    const config = resourceConfigs[formData.resource_config];
+    if (config) {
+      formData.cpu_limit = config.cpu;
+      formData.memory_limit = config.memory;
+    }
+  }
+
+  function validateForm() {
+    errors = {};
+
+    // Docker tar包是必须的
+    if (!dockerTarFile) {
+      errors.docker_tar = 'Docker镜像tar包是必填项';
+    }
+
+    // model_ip 由后端自动设置，不需要验证
+
+    // 资源配置由预设选择，CPU和内存限制自动设置，不需要验证
+
+    // Priority validation
+    if (![1, 2, 3].includes(formData.priority)) {
+      errors.priority = '优先级必须选择1、2或3';
+    }
+
+    return Object.keys(errors).length === 0;
+  }
+
+  function handleSubmit() {
+    if (!validateForm()) {
+      return;
+    }
+
+    // 构建FormData以支持文件上传
+    const submitFormData = new FormData();
+    
+    // 添加Docker tar包（必需）
+    submitFormData.append('docker_tar', dockerTarFile);
+    
+    // 添加表单数据
+    Object.entries(formData).forEach(([key, value]) => {
+      if (key !== 'resource_config') { // 不包含resource_config，它只是用于选择预设
+        submitFormData.append(key, value.toString());
+      }
+    });
+    
+    // 添加示例文件（如果有）
+    if (examplesFile) {
+      submitFormData.append('examples_archive', examplesFile);
+    }
+
+    dispatch('create', submitFormData);
+  }
+
+  function handleKeydown(event) {
+    if (event.key === 'Escape' && !loading) {
+      handleClose();
+    }
+  }
+
+  // CPU limit presets
+  const cpuPresets = [
+    { value: '0.1', label: '0.1 cores (轻量)' },
+    { value: '0.2', label: '0.2 cores (推荐)' },
+    { value: '0.5', label: '0.5 cores' },
+    { value: '1.0', label: '1.0 cores' }
+  ];
+
+  // Memory limit presets
+  const memoryPresets = [
+    { value: '128Mi', label: '128Mi (最小)' },
+    { value: '256Mi', label: '256Mi (推荐)' },
+    { value: '512Mi', label: '512Mi' },
+    { value: '1Gi', label: '1Gi' }
+  ];
+
+  // 处理Docker tar文件选择
+  function handleDockerFileSelect(event) {
+    const input = event.target;
+    const file = input.files?.[0];
+    
+    if (!file) {
+      dockerTarFile = null;
+      return;
+    }
+    
+    // 验证文件大小 (最大2GB)
+    const maxSize = 2 * 1024 * 1024 * 1024;
+    if (file.size > maxSize) {
+      alert('Docker镜像tar包大小不能超过2GB');
+      input.value = '';
+      dockerTarFile = null;
+      return;
+    }
+    
+    // 验证文件格式
+    const allowedExtensions = ['.tar', '.tar.gz', '.tgz'];
+    const fileName = file.name.toLowerCase();
+    const isValidFormat = allowedExtensions.some(ext => fileName.endsWith(ext));
+    
+    if (!isValidFormat) {
+      alert('Docker镜像必须是tar包格式 (tar, tar.gz, tgz)');
+      input.value = '';
+      dockerTarFile = null;
+      return;
+    }
+    
+    dockerTarFile = file;
+  }
+
+  function removeDockerFile() {
+    dockerTarFile = null;
+    if (dockerFileInputRef) {
+      dockerFileInputRef.value = '';
+    }
+  }
+
+  // 处理examples文件选择
+  function handleFileSelect(event) {
+    const input = event.target;
+    const file = input.files?.[0];
+    
+    if (!file) {
+      examplesFile = null;
+      return;
+    }
+    
+    // 验证文件大小 (最大100MB)
+    const maxSize = 100 * 1024 * 1024;
+    if (file.size > maxSize) {
+      alert('示例数据文件大小不能超过100MB');
+      input.value = '';
+      examplesFile = null;
+      return;
+    }
+    
+    // 验证文件格式
+    const allowedExtensions = ['.zip', '.tar', '.tar.gz', '.tgz'];
+    const fileName = file.name.toLowerCase();
+    const isValidFormat = allowedExtensions.some(ext => fileName.endsWith(ext));
+    
+    if (!isValidFormat) {
+      alert('示例数据必须是压缩包格式 (zip, tar, tar.gz)');
+      input.value = '';
+      examplesFile = null;
+      return;
+    }
+    
+    examplesFile = file;
+  }
+
+  function removeExamplesFile() {
+    examplesFile = null;
+    if (fileInputRef) {
+      fileInputRef.value = '';
+    }
+  }
+
+  function formatFileSize(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+</script>
+
+<svelte:window on:keydown={handleKeydown} />
+
+{#if isOpen}
+  <!-- Backdrop with blur effect -->
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <!-- Modal Container -->
+    <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-3xl w-full mx-4 max-h-[100vh] overflow-hidden border border-gray-200 dark:border-gray-700">
+      <!-- Header -->
+      <div class="relative bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-700 px-6 py-5 border-b border-gray-200 dark:border-gray-600">
+        <div class="flex items-center space-x-3">
+          <div class="flex items-center justify-center w-10 h-10 bg-blue-100 dark:bg-blue-900 rounded-xl">
+            <Settings class="w-5 h-5 text-blue-600 dark:text-blue-400" />
+          </div>
+          <div>
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white">
+              创建模型服务
+            </h3>
+            <p class="text-sm text-gray-600 dark:text-gray-300 mt-1">
+              配置并部署您的机器学习模型服务
+            </p>
+          </div>
+        </div>
+        <button
+          class="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-all duration-200"
+          on:click={handleClose}
+          disabled={loading}
+        >
+          <X class="w-5 h-5" />
+        </button>
+      </div>
+
+      <!-- Form -->
+      <form bind:this={formElement} on:submit|preventDefault={handleSubmit}>
+        <div class="overflow-y-auto max-h-[calc(90vh-120px)]">
+          <div class="p-4 space-y-6">
+            <!-- Docker Requirements Notice -->
+            <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-xl p-6">
+              <div class="flex items-start space-x-3">
+                <div class="flex-shrink-0">
+                  <Info class="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" />
+                </div>
+                <div class="flex-1">
+                  <h4 class="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">
+                    Docker镜像要求
+                  </h4>
+                  <div class="text-sm text-blue-800 dark:text-blue-200 space-y-2">
+                    <p>您的Docker镜像必须包含以下文件结构（位于镜像的根目录）：</p>
+                    <ul class="list-disc list-inside ml-2 space-y-1">
+                      <li><code class="bg-blue-100 dark:bg-blue-800 px-1.5 py-0.5 rounded text-xs font-mono">gogogo.py</code> - 模型服务的启动文件</li>
+                      <li><code class="bg-blue-100 dark:bg-blue-800 px-1.5 py-0.5 rounded text-xs font-mono">mc.json</code> - 配置文件</li>
+                      <li><code class="bg-blue-100 dark:bg-blue-800 px-1.5 py-0.5 rounded text-xs font-mono">model/</code> - 模型文件夹</li>
+                    </ul>
+                    <p class="mt-2">可选文件：</p>
+                    <ul class="list-disc list-inside ml-2">
+                      <li><code class="bg-blue-100 dark:bg-blue-800 px-1.5 py-0.5 rounded text-xs font-mono">examples/</code> - 用于展示的样例数据文件夹（可后续上传）</li>
+                    </ul>
+                    <p class="mt-2 text-xs">
+                      <strong>注意</strong>：上传的容器应是完全可运行的，不允许存在依赖缺失或环境配置错误。
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Basic Information Section -->
+            <div class="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+              <div class="flex items-center space-x-2 mb-4">
+                <div class="flex items-center justify-center w-8 h-8 bg-blue-100 dark:bg-blue-900 rounded-lg">
+                  <Info class="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                </div>
+                <h4 class="text-lg font-semibold text-gray-900 dark:text-white">基本信息</h4>
+              </div>
+              
+              <!-- Docker Tar Package Upload -->
+              <div class="space-y-3">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Docker镜像tar包 <span class="text-red-500">*</span>
+                </label>
+                
+                {#if dockerTarFile}
+                  <!-- 已选择文件显示 -->
+                  <div class="bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+                    <div class="flex items-center justify-between">
+                      <div class="flex items-center">
+                        <div class="flex-shrink-0 w-10 h-10 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center mr-3">
+                          <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                          </svg>
+                        </div>
+                        <div>
+                          <p class="text-sm font-medium text-gray-900 dark:text-white">{dockerTarFile.name}</p>
+                          <p class="text-xs text-gray-500 dark:text-gray-400">{formatFileSize(dockerTarFile.size)}</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        on:click={removeDockerFile}
+                        class="text-red-500 hover:text-red-700 text-sm font-medium"
+                        disabled={loading}
+                      >
+                        移除
+                      </button>
+                    </div>
+                  </div>
+                {:else}
+                  <!-- Docker镜像tar包选择器 -->
+                  <div class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center hover:border-gray-400 dark:hover:border-gray-500 transition-colors {errors.docker_tar ? 'border-red-500' : ''}">
+                    <input
+                      type="file"
+                      accept=".tar,.tar.gz,.tgz"
+                      on:change={handleDockerFileSelect}
+                      bind:this={dockerFileInputRef}
+                      class="hidden"
+                      disabled={loading}
+                    />
+                    <svg class="mx-auto h-16 w-16 text-gray-400 dark:text-gray-500" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                      <path d="M24 8v24m8-12l-8-8-8 8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                    <div class="mt-4">
+                      <button
+                        type="button"
+                        on:click={() => dockerFileInputRef?.click()}
+                        class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium text-base"
+                        disabled={loading}
+                      >
+                        点击选择Docker镜像tar包
+                      </button>
+                      <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">支持 TAR, TAR.GZ, TGZ 格式</p>
+                      <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">最大文件大小: 2GB</p>
+                    </div>
+                  </div>
+                  {#if errors.docker_tar}
+                    <p class="text-sm text-red-600 dark:text-red-400 flex items-center space-x-1">
+                      <AlertCircle class="w-4 h-4" />
+                      <span>{errors.docker_tar}</span>
+                    </p>
+                  {/if}
+                {/if}
+              </div>
+
+
+
+              <!-- Description -->
+              <div class="md:col-span-3 space-y-2">
+                <label for="description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  服务描述
+                </label>
+                <textarea
+                  id="description"
+                  bind:value={formData.description}
+                  rows="3"
+                  class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white transition-all duration-200 resize-none"
+                  placeholder="描述这个服务的功能和用途..."
+                  disabled={loading}
+                ></textarea>
+              </div>
+
+              <!-- Examples File Upload -->
+              <div class="md:col-span-3 space-y-2">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  示例数据 <span class="text-gray-500">(可选)</span>
+                </label>
+                
+                {#if examplesFile}
+                  <!-- 已选择文件显示 -->
+                  <div class="bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+                    <div class="flex items-center justify-between">
+                      <div class="flex items-center">
+                        <div class="flex-shrink-0 w-8 h-8 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center mr-3">
+                          <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 0v12h8V6H8V4H6z" clip-rule="evenodd"></path>
+                          </svg>
+                        </div>
+                        <div>
+                          <p class="text-sm font-medium text-gray-900 dark:text-white">{examplesFile.name}</p>
+                          <p class="text-xs text-gray-500 dark:text-gray-400">{formatFileSize(examplesFile.size)}</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        on:click={removeExamplesFile}
+                        class="text-red-500 hover:text-red-700 text-sm font-medium"
+                        disabled={loading}
+                      >
+                        移除
+                      </button>
+                    </div>
+                  </div>
+                {:else}
+                  <!-- 文件选择器 -->
+                  <div class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center hover:border-gray-400 dark:hover:border-gray-500 transition-colors">
+                    <input
+                      type="file"
+                      accept=".zip,.tar,.tar.gz,.tgz"
+                      on:change={handleFileSelect}
+                      bind:this={fileInputRef}
+                      class="hidden"
+                      disabled={loading}
+                    />
+                    <svg class="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                      <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                    <div class="mt-4">
+                      <button
+                        type="button"
+                        on:click={() => fileInputRef?.click()}
+                        class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium text-sm"
+                        disabled={loading}
+                      >
+                        点击选择示例数据压缩包
+                      </button>
+                      <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">支持 ZIP, TAR, TAR.GZ 格式，最大100MB</p>
+                      <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">可以在服务创建后通过文件更新功能添加</p>
+                    </div>
+                  </div>
+                {/if}
+              </div>
+            </div>
+
+            <!-- Advanced Configuration Section -->
+            <div class="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+              <div class="flex items-center space-x-2 mb-4">
+                <div class="flex items-center justify-center w-8 h-8 bg-purple-100 dark:bg-purple-900 rounded-lg">
+                  <Settings class="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                </div>
+                <h4 class="text-lg font-semibold text-gray-900 dark:text-white">资源选项</h4>
+              </div>
+
+              <div class="flex gap-6">
+                <!-- Resource Configuration -->
+                <div class="lg:col-span-2 space-y-2">
+                  <label for="resource_config" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    资源配置 <span class="text-red-500">*</span>
+                  </label>
+                  <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {#each Object.entries(resourceConfigs) as [key, config]}
+                      <label class="relative">
+                        <input
+                          type="radio"
+                          name="resource_config"
+                          value={key}
+                          bind:group={formData.resource_config}
+                          on:change={handleResourceConfigChange}
+                          class="sr-only"
+                          disabled={loading}
+                        />
+                        <div class="flex flex-col p-2 border-2 rounded-lg cursor-pointer transition-all duration-200 hover:shadow-md {formData.resource_config === key ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'}">
+                          <div class="flex items-center justify-between mb-2">
+                            <span class="font-medium text-sm py-1 text-gray-900 dark:text-white">{config.label}</span>
+                            {#if key === 'recommended'}
+                              <span class="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 px-2 py-1 rounded-full">推荐</span>
+                            {/if}
+                          </div>
+                          <div class="flex items-center space-x-3 text-xs text-gray-600 dark:text-gray-400">
+                            <div class="flex items-center space-x-1">
+                              <Cpu class="w-3 h-3" />
+                              <span>{config.cpu}</span>
+                            </div>
+                            <div class="flex items-center space-x-1">
+                              <HardDrive class="w-3 h-3" />
+                              <span>{config.memory}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </label>
+                    {/each}
+                  </div>
+                  {#if errors.resource_config}
+                    <p class="text-sm text-red-600 dark:text-red-400 flex items-center space-x-1">
+                      <AlertCircle class="w-4 h-4" />
+                      <span>{errors.resource_config}</span>
+                    </p>
+                  {/if}
+                  <div class="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 mt-3">
+                    <p class="text-sm text-blue-800 dark:text-blue-200 flex items-center space-x-2">
+                      <Info class="w-4 h-4" />
+                      <span>当前配置：CPU {formData.cpu_limit} cores，内存 {formData.memory_limit}</span>
+                    </p>
+                  </div>
+                </div>
+
+                <!-- Priority and Public Access -->
+                <div>
+                  <!-- Priority -->
+                  <div class="space-y-2">
+                    <label for="priority" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      启动优先级
+                    </label>
+                    <select
+                      id="priority"
+                      bind:value={formData.priority}
+                      class="w-full px-4 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white transition-all duration-200 {errors.priority ? 'border-red-500 focus:ring-red-500' : ''}"
+                      disabled={loading}
+                    >
+                      {#each priorityOptions as option}
+                        <option value={option.value}>
+                          {option.label}
+                        </option>
+                      {/each}
+                    </select>
+                    {#if errors.priority}
+                      <p class="text-sm text-red-600 dark:text-red-400 flex items-center space-x-1">
+                        <AlertCircle class="w-4 h-4" />
+                        <span>{errors.priority}</span>
+                      </p>
+                    {/if}
+                    <p class="text-xs text-gray-500 dark:text-gray-400">
+                      数值越小优先级越高
+                    </p>
+                  </div>
+
+                  <!-- Public Access -->
+                  <div class="bg-gradient-to-r mt-2 from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg py-2 px-4 border border-green-200 dark:border-green-700">
+                    <div class="flex items-start space-x-3">
+                      <input
+                        type="checkbox"
+                        id="is_public"
+                        bind:checked={formData.is_public}
+                        class="mt-1 h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded transition-colors"
+                        disabled={loading}
+                      />
+                      <div class="flex-1">
+                        <label for="is_public" class="block text-sm font-medium text-gray-900 dark:text-white">
+                          <div class="flex items-center space-x-2">
+                            <Shield class="w-4 h-4 text-green-600 dark:text-green-400" />
+                            <span>公开访问</span>
+                          </div>
+                        </label>
+                        <p class="text-xs text-gray-600 dark:text-gray-400">
+                          允许任何人访问和使用此服务
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sticky Footer -->
+        <div class="sticky bottom-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 px-6 py-4">
+          <div class="flex items-center justify-between">
+            <div class="text-sm text-gray-500 dark:text-gray-400">
+              {#if loading}
+                <div class="flex items-center space-x-2">
+                  <div class="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                  <span>正在创建服务...</span>
+                </div>
+              {:else}
+                确保所有配置正确后点击创建
+              {/if}
+            </div>
+            <div class="flex space-x-3">
+              <button
+                type="button"
+                class="px-6 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-500 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                on:click={handleClose}
+                disabled={loading}
+              >
+                取消
+              </button>
+              <button
+                type="submit"
+                class="px-6 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98]"
+                disabled={loading}
+              >
+                {#if loading}
+                  <div class="flex items-center space-x-2">
+                    <div class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
+                    <span>创建中...</span>
+                  </div>
+                {:else}
+                  <div class="flex items-center space-x-2">
+                    <Zap class="w-4 h-4" />
+                    <span>创建服务</span>
+                  </div>
+                {/if}
+              </button>
+            </div>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+{/if}
+
+<style>
+  /* Custom animations and transitions */
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(-10px) scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  /* Modal enter animation */
+  .fixed.inset-0 {
+    animation: fadeIn 0.2s ease-out;
+  }
+
+  .fixed.inset-0 > div {
+    animation: slideIn 0.3s ease-out;
+  }
+
+  /* Custom radio button styles */
+  input[type="radio"]:checked + div {
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+  }
+
+  /* Custom checkbox styles */
+  input[type="checkbox"]:indeterminate {
+    background-color: #3b82f6;
+    border-color: #3b82f6;
+  }
+
+  /* Scrollbar styling for better UX */
+  .overflow-y-auto::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .overflow-y-auto::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .overflow-y-auto::-webkit-scrollbar-thumb {
+    background: rgba(156, 163, 175, 0.5);
+    border-radius: 3px;
+  }
+
+  .overflow-y-auto::-webkit-scrollbar-thumb:hover {
+    background: rgba(156, 163, 175, 0.7);
+  }
+
+  /* Dark mode scrollbar */
+  .dark .overflow-y-auto::-webkit-scrollbar-thumb {
+    background: rgba(75, 85, 99, 0.5);
+  }
+
+  .dark .overflow-y-auto::-webkit-scrollbar-thumb:hover {
+    background: rgba(75, 85, 99, 0.7);
+  }
+</style>
