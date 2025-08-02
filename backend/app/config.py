@@ -48,17 +48,26 @@ class Settings(BaseSettings):
         30  # Override the previous definition with more explicit name
     )
 
+    # mManager Configuration
+    mmanager_enabled: bool = True
+    mmanager_api_key: str = "mmanager-secure-key-12345"
+    mmanager_controllers: List[dict] = [
+        {
+            "id": "mmanager-local-01",
+            "url": "http://localhost:8001",
+            "server_type": "cpu",
+            "enabled": True,
+            "priority": 1,
+            "weight": 100
+        }
+    ]
+    
+    # Service Configuration (updated for mManager)
+    service_domain: str = "localhost"
+
     # Logging
     log_level: str = "INFO"
     log_format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-
-    # Pagination
-    default_page_size: int = 20
-    max_page_size: int = 100
-
-    # Cache
-    cache_ttl: int = 3600  # 1 hour
-    cache_prefix: str = "geoml_hub:"
 
     # MinIO Storage
     minio_endpoint: str = "localhost:9000"
@@ -92,24 +101,6 @@ class Settings(BaseSettings):
     exponential_backoff_enabled: bool = True  # 是否启用指数退避重试
     max_retry_delay: int = 3600  # 最大重试延迟时间(秒)，默认1小时
 
-    # Docker Remote Connection
-    docker_ms_host: str = (
-        "unix:///var/run/docker.sock"  # Docker服务器地址，支持tcp://host:port, ssh://user@host, unix:///path/to/socket
-    )
-    docker_ms_tls_verify: bool = False  # 是否启用TLS验证
-    docker_ms_cert_path: str = (
-        ""  # TLS证书路径 (目录路径，包含ca.pem, cert.pem, key.pem)
-    )
-    docker_ms_ca_cert: str = ""  # CA证书文件路径
-    docker_ms_client_cert: str = ""  # 客户端证书文件路径
-    docker_ms_client_key: str = ""  # 客户端私钥文件路径
-    docker_ms_timeout: int = 60  # Docker API超时时间(秒)
-
-    # Model Service TLS Configuration
-    service_tls_enabled: bool = False  # 是否为模型服务启用TLS
-    service_tls_cert_path: str = ""  # 服务TLS证书文件路径
-    service_tls_key_path: str = ""  # 服务TLS私钥文件路径
-    service_domain: str = "localhost"  # 服务域名
 
     # Resource Limits
     default_cpu_limit: str = "0.3"  # 默认CPU限制

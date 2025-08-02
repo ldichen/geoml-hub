@@ -22,7 +22,7 @@ from sqlalchemy import select
 
 from app.models.service import ModelService
 from app.schemas.service import ServiceStatus, HealthStatus
-from app.services.model_service import ModelServiceManager
+from app.services.model_service import service_manager
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ class ContainerFileUpdateService:
     """容器文件更新服务"""
     
     def __init__(self):
-        self.service_manager = ModelServiceManager()
+        self.service_manager = service_manager
         self.supported_archives = {'.zip', '.tar', '.tar.gz', '.tgz'}
         self.container_base_path = "/app"  # 容器内基础路径
         

@@ -91,6 +91,7 @@ class ModelService(Base):
     instances = relationship("ServiceInstance", back_populates="service", cascade="all, delete-orphan")
     logs = relationship("ServiceLog", back_populates="service", cascade="all, delete-orphan")
     health_checks = relationship("ServiceHealthCheck", back_populates="service", cascade="all, delete-orphan")
+    container_registry = relationship("ContainerRegistry", back_populates="service", uselist=False)
 
 
 class ServiceInstance(Base):

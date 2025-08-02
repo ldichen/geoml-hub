@@ -13,7 +13,7 @@ from sqlalchemy import select
 
 from app.database import get_async_db
 from app.models.service import ModelService
-from app.services.model_service import ModelServiceManager
+from app.services.model_service import service_manager
 from app.utils.resource_manager import resource_manager
 from app.config import settings
 
@@ -24,7 +24,7 @@ class ServiceScheduler:
     """服务调度器"""
     
     def __init__(self):
-        self.service_manager = ModelServiceManager()
+        self.service_manager = service_manager
         self.is_running = False
         self._tasks = []
     
@@ -181,10 +181,9 @@ class ServiceScheduler:
                     for service in failed_services:
                         try:
                             # 检查重试延迟
-                            from app.services.model_service import ServiceFailureAnalyzer
-                            
                             retry_count = service.auto_start_retry_count or 0
-                            required_delay = ServiceFailureAnalyzer.get_retry_delay(retry_count)
+                            # 简单的指数退避算法：基础延迟60秒，每次失败加倍，最大3600秒
+                            required_delay = min(60 * (2 ** retry_count), 3600)
                             
                             if service.last_started_at:
                                 time_since_failure = datetime.utcnow() - service.last_started_at

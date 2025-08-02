@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  mmanager:
+    build: .
+    container_name: mmanager-controller
+    ports:
+      - "8001:8000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      - MMANAGER_API_KEY=mmanager-secure-key-12345
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - LOG_LEVEL=INFO
+      - SERVER_ID=mmanager-001
+      - SERVER_TYPE=gpu
+      - MAX_CONTAINERS=50
+    restart: unless-stopped
+    networks:
+      - geoml-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  geoml-network:
+    external: true

@@ -1,5 +1,5 @@
 """
-模型服务管理API路由
+模型服务管理API路由 v2.0 - 基于mManager
 
 这个模块提供了模型服务管理的所有API端点：
 - 服务的CRUD操作
@@ -36,11 +36,10 @@ from app.schemas.service import (
     ServiceAccessRequest,
     ServiceAccessResponse,
 )
-from app.services.model_service import ModelServiceManager
 from app.services.container_service import container_file_service
+from app.services.model_service import service_manager
 
 router = APIRouter(prefix="/api", tags=["services"])
-service_manager = ModelServiceManager()
 logger = logging.getLogger(__name__)
 
 

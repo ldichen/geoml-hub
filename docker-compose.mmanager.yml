@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  # mManager GPU控制器
+  mmanager-gpu:
+    image: python:3.9-slim
+    container_name: mmanager-gpu-01
+    ports:
+      - "8001:8001"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./mmanager:/app
+      - ./data/mmanager/gpu:/app/data
+    environment:
+      - MMANAGER_SERVER_TYPE=gpu
+      - MMANAGER_API_KEY=mmanager-secure-key-12345-change-in-production
+      - MMANAGER_PORT=8001
+      - MMANAGER_MAX_CONTAINERS=10
+      - MMANAGER_LOG_LEVEL=INFO
+    working_dir: /app
+    command: >
+      bash -c "
+        pip install fastapi uvicorn docker aiohttp pydantic &&
+        python mmanager_server.py
+      "
+    restart: unless-stopped
+    networks:
+      - geoml-network
+
+  # mManager CPU控制器  
+  mmanager-cpu:
+    image: python:3.9-slim
+    container_name: mmanager-cpu-01
+    ports:
+      - "8002:8002"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./mmanager:/app
+      - ./data/mmanager/cpu:/app/data
+    environment:
+      - MMANAGER_SERVER_TYPE=cpu
+      - MMANAGER_API_KEY=mmanager-secure-key-12345-change-in-production
+      - MMANAGER_PORT=8002
+      - MMANAGER_MAX_CONTAINERS=20
+      - MMANAGER_LOG_LEVEL=INFO
+    working_dir: /app
+    command: >
+      bash -c "
+        pip install fastapi uvicorn docker aiohttp pydantic &&
+        python mmanager_server.py
+      "
+    restart: unless-stopped
+    networks:
+      - geoml-network
+
+networks:
+  geoml-network:
+    external: true

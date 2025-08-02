@@ -4,7 +4,10 @@ from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.routers import auth, classifications, users, repositories, search, admin, files, metadata, discover, system, file_editor, personal_files, services
 from app.middleware.error_handler import add_exception_handlers
+from app.services.model_service import service_manager
+from app.database import get_async_db
 import logging
+import asyncio
 
 # Configure logging
 logging.basicConfig(
@@ -14,6 +17,22 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+# 应用启动事件
+async def startup_event():
+    """应用启动时初始化服务"""
+    logger.info("初始化 GeoML-Hub v2.0 服务...")
+    
+    # 初始化服务管理器和mManager客户端
+    async for db in get_async_db():
+        try:
+            await service_manager.initialize(db)
+            logger.info("服务管理器初始化成功")
+            break
+        except Exception as e:
+            logger.error(f"服务管理器初始化失败: {e}")
+        finally:
+            await db.close()
+
 # Create FastAPI app
 app = FastAPI(
     title="GeoML-Hub API v2.0",
@@ -21,6 +40,7 @@ app = FastAPI(
     version="2.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
+    on_startup=[startup_event],
 )
 
 # Add CORS middleware
