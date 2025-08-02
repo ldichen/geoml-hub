@@ -338,6 +338,95 @@ class MManagerControllerManager:
                 )
         
         await db.commit()
+    
+    # ================== 镜像管理方法 ==================
+    
+    async def pull_image(self, controller_id: str, image_name: str, 
+                        auth_config: Optional[Dict] = None) -> Dict:
+        """在指定控制器上拉取镜像"""
+        if controller_id not in self.controllers:
+            raise Exception(f"控制器 {controller_id} 不存在")
+            
+        client = self.controllers[controller_id]
+        
+        pull_data = {
+            "image": image_name,
+            "auth": auth_config
+        }
+        
+        result = await client._request("POST", "/images/pull", json=pull_data)
+        logger.info(f"控制器 {controller_id} 拉取镜像 {image_name}: {result}")
+        return result
+    
+    async def list_images(self, controller_id: str) -> List[Dict]:
+        """列出控制器上的所有镜像"""
+        if controller_id not in self.controllers:
+            raise Exception(f"控制器 {controller_id} 不存在")
+            
+        client = self.controllers[controller_id]
+        result = await client._request("GET", "/images/")
+        return result.get("images", []) if result else []
+    
+    async def remove_image(self, controller_id: str, image_name: str, force: bool = False) -> bool:
+        """删除控制器上的镜像"""
+        if controller_id not in self.controllers:
+            raise Exception(f"控制器 {controller_id} 不存在")
+            
+        client = self.controllers[controller_id]
+        
+        try:
+            params = {"force": force}
+            await client._request("DELETE", f"/images/{image_name}", params=params)
+            logger.info(f"控制器 {controller_id} 删除镜像 {image_name}")
+            return True
+        except Exception as e:
+            logger.error(f"控制器 {controller_id} 删除镜像失败: {e}")
+            return False
+    
+    async def get_image_info(self, controller_id: str, image_name: str) -> Optional[Dict]:
+        """获取镜像详细信息"""
+        if controller_id not in self.controllers:
+            raise Exception(f"控制器 {controller_id} 不存在")
+            
+        client = self.controllers[controller_id]
+        result = await client._request("GET", f"/images/{image_name}")
+        return result
+    
+    async def clean_unused_images(self, controller_id: str) -> Dict:
+        """清理未使用的镜像"""
+        if controller_id not in self.controllers:
+            raise Exception(f"控制器 {controller_id} 不存在")
+            
+        client = self.controllers[controller_id]
+        result = await client._request("POST", "/images/prune")
+        logger.info(f"控制器 {controller_id} 清理未使用镜像: {result}")
+        return result
+    
+    async def ensure_image_available(self, controller_id: str, image_name: str, 
+                                   harbor_auth: Optional[Dict] = None) -> bool:
+        """确保镜像在控制器上可用，如不存在则拉取"""
+        try:
+            # 1. 检查镜像是否已存在
+            image_info = await self.get_image_info(controller_id, image_name)
+            if image_info:
+                logger.info(f"镜像 {image_name} 已存在于控制器 {controller_id}")
+                return True
+            
+            # 2. 镜像不存在，尝试拉取
+            logger.info(f"镜像 {image_name} 不存在，开始拉取到控制器 {controller_id}")
+            pull_result = await self.pull_image(controller_id, image_name, harbor_auth)
+            
+            # 3. 验证拉取是否成功
+            if pull_result.get("status") == "success":
+                logger.info(f"镜像 {image_name} 成功拉取到控制器 {controller_id}")
+                return True
+            else:
+                logger.error(f"镜像 {image_name} 拉取失败: {pull_result}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"确保镜像可用失败: {e}")
+            return False
 
 # 全局控制器管理器实例
 mmanager_controller_manager = MManagerControllerManager()

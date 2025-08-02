@@ -42,3 +42,6 @@ def get_logger(name: str = __name__, level: Optional[str] = None) -> logging.Log
     logger.addHandler(handler)
     
     return logger
+
+# 便捷的默认logger实例
+logger = get_logger("app")

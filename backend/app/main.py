@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.config import settings
-from app.routers import auth, classifications, users, repositories, search, admin, files, metadata, discover, system, file_editor, personal_files, services
+from app.routers import auth, classifications, users, repositories, search, admin, files, metadata, discover, system, file_editor, personal_files, services, images
 from app.middleware.error_handler import add_exception_handlers
 from app.services.model_service import service_manager
 from app.database import get_async_db
@@ -82,6 +82,8 @@ app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 app.include_router(system.router, prefix="/api/system", tags=["system"])
 # 模型服务管理
 app.include_router(services.router, tags=["services"])
+# 镜像管理
+app.include_router(images.router, prefix="/api", tags=["images"])
 
 
 @app.get("/")

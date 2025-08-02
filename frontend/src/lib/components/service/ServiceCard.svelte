@@ -16,16 +16,20 @@
       case 'running':
         return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
       case 'starting':
+      case 'deploying':
         return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
       case 'stopping':
         return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200';
       case 'stopped':
+      case 'created':
         return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
       case 'error':
+      case 'failed':
         return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
       case 'idle':
         return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
       case 'retry_pending':
+      case 'pending':
         return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
       case 'permanently_failed':
         return 'bg-red-200 text-red-900 dark:bg-red-800 dark:text-red-100';
@@ -59,9 +63,25 @@
         return '永久失败';
       case 'retry_exhausted':
         return '重试次数耗尽';
+      case 'pending':
+        return '等待中';
+      case 'deploying':
+        return '部署中';
+      case 'failed':
+        return '失败';
       default:
         return '未知';
     }
+  }
+
+  // 检查是否为错误状态
+  function isErrorStatus(status) {
+    return ['error', 'permanently_failed', 'retry_exhausted', 'failed'].includes(status);
+  }
+
+  // 检查是否为进行中状态
+  function isProgressStatus(status) {
+    return ['starting', 'stopping', 'deploying', 'retry_pending', 'pending'].includes(status);
   }
 
   function formatFileSize(bytes) {
@@ -139,7 +159,10 @@
     
     <!-- Status Badge -->
     <div class="flex items-center space-x-2">
-      <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {getServiceStatusColor(service.status)}">
+      <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {getServiceStatusColor(service.status)} {isProgressStatus(service.status) ? 'animate-pulse' : ''}">
+        {#if isProgressStatus(service.status)}
+          <div class="w-2 h-2 bg-current rounded-full mr-1.5 animate-spin"></div>
+        {/if}
         {getServiceStatusText(service.status)}
       </span>
       {#if service.is_public}
@@ -147,37 +170,79 @@
           公开
         </span>
       {/if}
+      {#if isErrorStatus(service.status)}
+        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+          ⚠️ 需要处理
+        </span>
+      {/if}
     </div>
   </div>
 
   <!-- Service Info -->
-  <div class="grid grid-cols-2 gap-4 mb-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-    <div class="flex items-center space-x-2">
-      <Cpu class="w-4 h-4 text-gray-400" />
-      <span class="text-sm text-gray-600 dark:text-gray-300">
-        CPU: {service.cpu_limit}
-      </span>
-    </div>
-    
-    <div class="flex items-center space-x-2">
-      <HardDrive class="w-4 h-4 text-gray-400" />
-      <span class="text-sm text-gray-600 dark:text-gray-300">
-        内存: {service.memory_limit}
-      </span>
-    </div>
-    
-    {#if service.gradio_port}
-      <div class="flex items-center space-x-2">
-        <span class="text-sm text-gray-600 dark:text-gray-300">
-          端口: {service.gradio_port}
+  <div class="mb-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+    <div class="grid grid-cols-2 gap-4 mb-3">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center space-x-2">
+          <Cpu class="w-4 h-4 text-blue-500" />
+          <span class="text-sm text-gray-600 dark:text-gray-300">CPU</span>
+        </div>
+        <span class="text-sm font-medium text-gray-900 dark:text-white">
+          {service.cpu_limit} cores
         </span>
+      </div>
+      
+      <div class="flex items-center justify-between">
+        <div class="flex items-center space-x-2">
+          <HardDrive class="w-4 h-4 text-green-500" />
+          <span class="text-sm text-gray-600 dark:text-gray-300">内存</span>
+        </div>
+        <span class="text-sm font-medium text-gray-900 dark:text-white">
+          {service.memory_limit}
+        </span>
+      </div>
+    </div>
+    
+    {#if service.gradio_port || service.model_ip}
+      <div class="grid grid-cols-2 gap-4 pt-3 border-t border-gray-200 dark:border-gray-600">
+        {#if service.gradio_port}
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <Wifi class="w-4 h-4 text-purple-500" />
+              <span class="text-sm text-gray-600 dark:text-gray-300">端口</span>
+            </div>
+            <span class="text-sm font-medium text-gray-900 dark:text-white">
+              {service.gradio_port}
+            </span>
+          </div>
+        {/if}
+        
+        {#if service.model_ip}
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <svg class="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9v-9m0-9v9"></path>
+              </svg>
+              <span class="text-sm text-gray-600 dark:text-gray-300">IP</span>
+            </div>
+            <span class="text-sm font-medium text-gray-900 dark:text-white">
+              {service.model_ip}
+            </span>
+          </div>
+        {/if}
       </div>
     {/if}
     
-    {#if service.model_ip}
-      <div class="flex items-center space-x-2">
-        <span class="text-sm text-gray-600 dark:text-gray-300">
-          IP: {service.model_ip}
+    <!-- Priority indicator -->
+    {#if service.priority !== undefined}
+      <div class="flex items-center justify-between pt-3 border-t border-gray-200 dark:border-gray-600">
+        <div class="flex items-center space-x-2">
+          <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+          </svg>
+          <span class="text-sm text-gray-600 dark:text-gray-300">优先级</span>
+        </div>
+        <span class="text-sm font-medium text-gray-900 dark:text-white">
+          {service.priority === 1 ? '高' : service.priority === 2 ? '中' : '低'}
         </span>
       </div>
     {/if}

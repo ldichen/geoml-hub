@@ -11,7 +11,7 @@ from datetime import datetime
 
 from app.config import settings
 from app.middleware import AuthenticationMiddleware, LoggingMiddleware
-from app.routers import containers, health
+from app.routers import containers, health, images
 from app.services.docker_service import docker_service
 
 
@@ -90,6 +90,7 @@ app.add_middleware(AuthenticationMiddleware)
 # 注册路由
 app.include_router(health.router)
 app.include_router(containers.router)
+app.include_router(images.router)
 
 
 @app.get("/")

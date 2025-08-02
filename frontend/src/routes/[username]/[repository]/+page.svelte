@@ -17,6 +17,9 @@
   import ServiceMonitor from '$lib/components/service/ServiceMonitor.svelte';
   import ServiceLogs from '$lib/components/service/ServiceLogs.svelte';
   import ServiceSettings from '$lib/components/service/ServiceSettings.svelte';
+  import ImageList from '$lib/components/image/ImageList.svelte';
+  import ImageDetailModal from '$lib/components/image/ImageDetailModal.svelte';
+  import ServiceFromImageModal from '$lib/components/image/ServiceFromImageModal.svelte';
 
   let repository = null;
   let files = [];
@@ -42,6 +45,11 @@
   let showServiceSettings = false;
   let selectedService = null;
   let serviceModalLoading = false;
+
+  // Image modals and views
+  let showImageDetailModal = false;
+  let showServiceFromImageModal = false;
+  let selectedImage = null;
 
   $: username = $page.params.username;
   $: repoName = $page.params.repository;
@@ -922,6 +930,29 @@
     showNotification('访问令牌已重新生成', 'success');
   }
 
+  // Image related event handlers
+  function handleImageViewDetail(event) {
+    selectedImage = event.detail.image;
+    showImageDetailModal = true;
+  }
+
+  function handleImageCreateService(event) {
+    selectedImage = event.detail.image;
+    showServiceFromImageModal = true;
+  }
+
+  function handleImageServiceCreated(event) {
+    showServiceFromImageModal = false;
+    showNotification(`服务 ${event.detail.service.service_name} 创建成功`, 'success');
+    // 重新加载服务列表
+    loadServices();
+  }
+
+  function handleImageDeleted(event) {
+    showNotification(`镜像已删除`, 'success');
+    // The ImageList component will handle reloading its own data
+  }
+
 
 </script>
 
@@ -1094,6 +1125,17 @@
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
                 </svg>
                 Services ({services.length})
+              </button>
+              <button
+                class="py-2 px-1 border-b-2 font-medium text-sm {activeTab === 'images' 
+                  ? 'border-blue-500 text-blue-600 dark:text-blue-400' 
+                  : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}"
+                on:click={() => activeTab = 'images'}
+              >
+                <svg class="h-4 w-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4V2a1 1 0 011-1h8a1 1 0 011 1v2h4a1 1 0 011 1v1a1 1 0 01-1 1v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7a1 1 0 01-1-1V5a1 1 0 011-1h4z"></path>
+                </svg>
+                Images
               </button>
               {#if $currentUser && repository.owner?.username === $currentUser.username}
                 <button
@@ -1543,6 +1585,17 @@
                   on:batchDelete={(e) => handleBatchDeleteServices(e.detail)}
                 />
               </div>
+            {:else if activeTab === 'images'}
+              <!-- Images Tab -->
+              <div class="py-6">
+                <ImageList
+                  repositoryId={repository.id}
+                  canManage={isRepoOwner}
+                  on:viewDetail={handleImageViewDetail}
+                  on:createService={handleImageCreateService}
+                  on:delete={handleImageDeleted}
+                />
+              </div>
             {:else if activeTab === 'settings'}
               {#if $currentUser && repository.owner?.username === $currentUser.username}
                 <!-- Repository Settings -->
@@ -1831,6 +1884,26 @@
       </div>
     </div>
   </div>
+{/if}
+
+<!-- Image Detail Modal -->
+{#if showImageDetailModal && selectedImage}
+  <ImageDetailModal
+    image={selectedImage}
+    canManage={isRepoOwner}
+    on:close={() => showImageDetailModal = false}
+    on:delete={handleImageDeleted}
+    on:serviceCreated={handleImageServiceCreated}
+  />
+{/if}
+
+<!-- Service From Image Modal -->
+{#if showServiceFromImageModal && selectedImage}
+  <ServiceFromImageModal
+    image={selectedImage}
+    on:created={handleImageServiceCreated}
+    on:close={() => showServiceFromImageModal = false}
+  />
 {/if}
 
 <style>

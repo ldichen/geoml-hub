@@ -4,8 +4,12 @@
 
   export let isOpen = false;
   export let loading = false;
+  export let availableImages = []; // 可用的镜像列表
 
   const dispatch = createEventDispatcher();
+
+  // 创建方式选择：'docker-upload' 或 'existing-image'
+  let creationMode = 'docker-upload';
 
   let formElement;
   // 资源配置预设
@@ -28,7 +32,8 @@
     cpu_limit: '0.3',
     memory_limit: '256Mi',
     is_public: false,
-    priority: 2
+    priority: 2,
+    selected_image_id: null // 当选择已有镜像时使用
   };
 
   let dockerTarFile = null;
@@ -51,11 +56,13 @@
       cpu_limit: '0.3',
       memory_limit: '256Mi',
       is_public: false,
-      priority: 2
+      priority: 2,
+      selected_image_id: null
     };
     errors = {};
     examplesFile = null;
     dockerTarFile = null;
+    creationMode = 'docker-upload';
     if (fileInputRef) {
       fileInputRef.value = '';
     }
@@ -76,14 +83,17 @@
   function validateForm() {
     errors = {};
 
-    // Docker tar包是必须的
-    if (!dockerTarFile) {
-      errors.docker_tar = 'Docker镜像tar包是必填项';
+    if (creationMode === 'docker-upload') {
+      // Docker tar包是必须的
+      if (!dockerTarFile) {
+        errors.docker_tar = 'Docker镜像tar包是必填项';
+      }
+    } else if (creationMode === 'existing-image') {
+      // 必须选择一个镜像
+      if (!formData.selected_image_id) {
+        errors.selected_image = '请选择一个镜像';
+      }
     }
-
-    // model_ip 由后端自动设置，不需要验证
-
-    // 资源配置由预设选择，CPU和内存限制自动设置，不需要验证
 
     // Priority validation
     if (![1, 2, 3].includes(formData.priority)) {
@@ -98,25 +108,39 @@
       return;
     }
 
-    // 构建FormData以支持文件上传
-    const submitFormData = new FormData();
-    
-    // 添加Docker tar包（必需）
-    submitFormData.append('docker_tar', dockerTarFile);
-    
-    // 添加表单数据
-    Object.entries(formData).forEach(([key, value]) => {
-      if (key !== 'resource_config') { // 不包含resource_config，它只是用于选择预设
-        submitFormData.append(key, value.toString());
+    if (creationMode === 'docker-upload') {
+      // 传统方式：构建FormData以支持文件上传
+      const submitFormData = new FormData();
+      
+      // 添加Docker tar包（必需）
+      submitFormData.append('docker_tar', dockerTarFile);
+      
+      // 添加表单数据
+      Object.entries(formData).forEach(([key, value]) => {
+        if (key !== 'resource_config' && key !== 'selected_image_id') { // 不包含resource_config和selected_image_id
+          submitFormData.append(key, value.toString());
+        }
+      });
+      
+      // 添加示例文件（如果有）
+      if (examplesFile) {
+        submitFormData.append('examples_archive', examplesFile);
       }
-    });
-    
-    // 添加示例文件（如果有）
-    if (examplesFile) {
-      submitFormData.append('examples_archive', examplesFile);
-    }
 
-    dispatch('create', submitFormData);
+      dispatch('create', { type: 'docker-upload', data: submitFormData });
+    } else if (creationMode === 'existing-image') {
+      // 新方式：基于已有镜像创建服务
+      const submitData = {
+        image_id: formData.selected_image_id,
+        description: formData.description,
+        cpu_limit: formData.cpu_limit,
+        memory_limit: formData.memory_limit,
+        is_public: formData.is_public,
+        priority: formData.priority
+      };
+
+      dispatch('create', { type: 'existing-image', data: submitData });
+    }
   }
 
   function handleKeydown(event) {
@@ -267,7 +291,54 @@
       <form bind:this={formElement} on:submit|preventDefault={handleSubmit}>
         <div class="overflow-y-auto max-h-[calc(90vh-120px)]">
           <div class="p-4 space-y-6">
-            <!-- Docker Requirements Notice -->
+            <!-- Creation Mode Selector -->
+            <div class="bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-gray-800 dark:to-gray-700 rounded-xl p-6 border border-indigo-200 dark:border-gray-600">
+              <h4 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">选择创建方式</h4>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Docker Upload Option -->
+                <label class="relative">
+                  <input
+                    type="radio"
+                    name="creationMode"
+                    value="docker-upload"
+                    bind:group={creationMode}
+                    class="sr-only"
+                    disabled={loading}
+                  />
+                  <div class="flex flex-col p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 hover:shadow-md {creationMode === 'docker-upload' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'}">
+                    <div class="flex items-center justify-between mb-2">
+                      <span class="font-medium text-sm text-gray-900 dark:text-white">上传Docker镜像</span>
+                      <span class="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 px-2 py-1 rounded-full">传统方式</span>
+                    </div>
+                    <p class="text-xs text-gray-600 dark:text-gray-400">直接上传Docker tar包创建服务</p>
+                  </div>
+                </label>
+
+                <!-- Existing Image Option -->
+                <label class="relative">
+                  <input
+                    type="radio"
+                    name="creationMode"
+                    value="existing-image"
+                    bind:group={creationMode}
+                    class="sr-only"
+                    disabled={loading || availableImages.length === 0}
+                  />
+                  <div class="flex flex-col p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 hover:shadow-md {creationMode === 'existing-image' ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'} {availableImages.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}">
+                    <div class="flex items-center justify-between mb-2">
+                      <span class="font-medium text-sm text-gray-900 dark:text-white">使用已有镜像</span>
+                      <span class="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 px-2 py-1 rounded-full">推荐</span>
+                    </div>
+                    <p class="text-xs text-gray-600 dark:text-gray-400">
+                      {availableImages.length > 0 ? `从 ${availableImages.length} 个可用镜像中选择` : '暂无可用镜像'}
+                    </p>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <!-- Docker Requirements Notice (仅在docker-upload模式显示) -->
+            {#if creationMode === 'docker-upload'}
             <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-xl p-6">
               <div class="flex items-start space-x-3">
                 <div class="flex-shrink-0">
@@ -295,6 +366,75 @@
                 </div>
               </div>
             </div>
+            {/if}
+
+            <!-- Image Selection (仅在existing-image模式显示) -->
+            {#if creationMode === 'existing-image'}
+            <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-xl p-6">
+              <div class="flex items-center space-x-2 mb-4">
+                <div class="flex items-center justify-center w-8 h-8 bg-green-100 dark:bg-green-900 rounded-lg">
+                  <svg class="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4V2a1 1 0 011-1h8a1 1 0 011 1v2h4a1 1 0 011 1v1a1 1 0 01-1 1v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7a1 1 0 01-1-1V5a1 1 0 011-1h4z"></path>
+                  </svg>
+                </div>
+                <h4 class="text-lg font-semibold text-gray-900 dark:text-white">选择镜像</h4>
+              </div>
+              
+              <div class="space-y-3">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  可用镜像 <span class="text-red-500">*</span>
+                </label>
+                
+                {#if availableImages.length > 0}
+                  <div class="grid gap-3">
+                    {#each availableImages as image (image.id)}
+                      <label class="relative">
+                        <input
+                          type="radio"
+                          name="selectedImage"
+                          value={image.id}
+                          bind:group={formData.selected_image_id}
+                          class="sr-only"
+                          disabled={loading || image.status !== 'ready'}
+                        />
+                        <div class="flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 hover:shadow-md {formData.selected_image_id === image.id ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'} {image.status !== 'ready' ? 'opacity-50 cursor-not-allowed' : ''}">
+                          <div class="flex-1">
+                            <div class="flex items-center justify-between mb-2">
+                              <span class="font-medium text-sm text-gray-900 dark:text-white">{image.name}:{image.tag}</span>
+                              <span class="text-xs px-2 py-1 rounded-full {image.status === 'ready' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}">
+                                {image.status === 'ready' ? '就绪' : image.status === 'uploading' ? '上传中' : '不可用'}
+                              </span>
+                            </div>
+                            {#if image.description}
+                              <p class="text-xs text-gray-600 dark:text-gray-400 mb-2">{image.description}</p>
+                            {/if}
+                            <div class="flex items-center space-x-4 text-xs text-gray-500">
+                              <span>服务数: {image.service_count || 0}/2</span>
+                              {#if image.harbor_size}
+                                <span>大小: {Math.round(image.harbor_size / 1024 / 1024)}MB</span>
+                              {/if}
+                              <span>ID: {image.id}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </label>
+                    {/each}
+                  </div>
+                {:else}
+                  <div class="text-center py-8 text-gray-500 dark:text-gray-400">
+                    <p>暂无可用镜像，请先<a href="#" class="text-blue-600 hover:underline">上传镜像</a></p>
+                  </div>
+                {/if}
+                
+                {#if errors.selected_image}
+                  <p class="text-sm text-red-600 dark:text-red-400 flex items-center space-x-1">
+                    <AlertCircle class="w-4 h-4" />
+                    <span>{errors.selected_image}</span>
+                  </p>
+                {/if}
+              </div>
+            </div>
+            {/if}
 
             <!-- Basic Information Section -->
             <div class="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
@@ -305,7 +445,8 @@
                 <h4 class="text-lg font-semibold text-gray-900 dark:text-white">基本信息</h4>
               </div>
               
-              <!-- Docker Tar Package Upload -->
+              <!-- Docker Tar Package Upload (仅在docker-upload模式显示) -->
+              {#if creationMode === 'docker-upload'}
               <div class="space-y-3">
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Docker镜像tar包 <span class="text-red-500">*</span>
@@ -371,8 +512,7 @@
                   {/if}
                 {/if}
               </div>
-
-
+              {/if}
 
               <!-- Description -->
               <div class="md:col-span-3 space-y-2">
@@ -389,7 +529,8 @@
                 ></textarea>
               </div>
 
-              <!-- Examples File Upload -->
+              <!-- Examples File Upload (仅在docker-upload模式显示) -->
+              {#if creationMode === 'docker-upload'}
               <div class="md:col-span-3 space-y-2">
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   示例数据 <span class="text-gray-500">(可选)</span>
@@ -449,6 +590,7 @@
                   </div>
                 {/if}
               </div>
+              {/if}
             </div>
 
             <!-- Advanced Configuration Section -->
@@ -607,7 +749,9 @@
                 {:else}
                   <div class="flex items-center space-x-2">
                     <Zap class="w-4 h-4" />
-                    <span>创建服务</span>
+                    <span>
+                      {creationMode === 'docker-upload' ? '上传并创建服务' : '基于镜像创建服务'}
+                    </span>
                   </div>
                 {/if}
               </button>

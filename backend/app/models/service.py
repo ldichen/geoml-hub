@@ -25,6 +25,7 @@ class ModelService(Base):
     # 外键关系
     repository_id = Column(Integer, ForeignKey("repositories.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    image_id = Column(Integer, ForeignKey("images.id", ondelete="CASCADE"), nullable=False, comment="关联的镜像ID")
     
     # 服务基本信息
     service_name = Column(String(255), nullable=False, comment="服务名称")
@@ -88,6 +89,7 @@ class ModelService(Base):
     # 关系
     repository = relationship("Repository", back_populates="model_services")
     user = relationship("User", back_populates="model_services")
+    image = relationship("Image", back_populates="services")
     instances = relationship("ServiceInstance", back_populates="service", cascade="all, delete-orphan")
     logs = relationship("ServiceLog", back_populates="service", cascade="all, delete-orphan")
     health_checks = relationship("ServiceHealthCheck", back_populates="service", cascade="all, delete-orphan")

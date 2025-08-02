@@ -59,6 +59,17 @@ class Repository(Base):
     views = relationship("RepositoryView", back_populates="repository", cascade="all, delete-orphan")
     classifications = relationship("RepositoryClassification", back_populates="repository", cascade="all, delete-orphan")
     model_services = relationship("ModelService", back_populates="repository", cascade="all, delete-orphan")
+    images = relationship("Image", back_populates="repository", cascade="all, delete-orphan")
+    
+    @property
+    def image_count(self):
+        """当前仓库的镜像数量"""
+        return len([img for img in self.images if img.status != 'deleted'])
+    
+    @property
+    def can_add_image(self):
+        """是否可以添加新镜像（每个仓库最多3个镜像）"""
+        return self.image_count < 3
 
 
 class RepositoryFile(Base):

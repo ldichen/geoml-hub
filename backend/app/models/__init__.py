@@ -3,7 +3,9 @@ from .user import User, UserFollow, UserStorage
 from .repository import Repository, RepositoryFile, RepositoryStar, RepositoryView, RepositoryClassification
 from .file_storage import FileUploadSession, FileDownload, SystemStorage, MinIOServiceHealth, UploadStatus
 from .personal_files import PersonalFile, PersonalFileDownload, PersonalFolder
+from .image import Image, ImageBuildLog
 from .service import ModelService, ServiceInstance, ServiceLog, ServiceHealthCheck
+from .container_registry import ContainerRegistry, MManagerController
 
 __all__ = [
     "Classification",
@@ -11,5 +13,7 @@ __all__ = [
     "Repository", "RepositoryFile", "RepositoryStar", "RepositoryView", "RepositoryClassification",
     "FileUploadSession", "FileDownload", "SystemStorage", "MinIOServiceHealth", "UploadStatus",
     "PersonalFile", "PersonalFileDownload", "PersonalFolder",
-    "ModelService", "ServiceInstance", "ServiceLog", "ServiceHealthCheck"
+    "Image", "ImageBuildLog",
+    "ModelService", "ServiceInstance", "ServiceLog", "ServiceHealthCheck",
+    "ContainerRegistry", "MManagerController"
 ]

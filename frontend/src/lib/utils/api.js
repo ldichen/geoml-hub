@@ -840,6 +840,57 @@ ApiClient.prototype.repositories = {
 		});
 	},
 
+	// ================== 镜像管理 API ==================
+
+	// 上传镜像
+	async uploadImage(repositoryId, formData) {
+		return api.request(`/api/repositories/${repositoryId}/images/upload`, {
+			method: 'POST',
+			body: formData,
+			headers: {
+				// Remove Content-Type to let browser set it with boundary for FormData
+			}
+		});
+	},
+
+	// 获取仓库的镜像列表
+	async getRepositoryImages(repositoryId) {
+		return api.request(`/api/repositories/${repositoryId}/images`);
+	},
+
+	// 获取镜像的服务列表
+	async getImageServices(imageId) {
+		return api.request(`/api/images/${imageId}/services`);
+	},
+
+	// 基于镜像创建服务
+	async createServiceFromImage(imageId, formData) {
+		return api.request(`/api/images/${imageId}/services/create`, {
+			method: 'POST',
+			body: formData,
+			headers: {
+				// Remove Content-Type for FormData
+			}
+		});
+	},
+
+	// 删除镜像
+	async deleteImage(imageId, force = false) {
+		return api.request(`/api/images/${imageId}?force=${force}`, {
+			method: 'DELETE'
+		});
+	},
+
+	// 获取镜像构建日志
+	async getImageBuildLogs(imageId, limit = 100) {
+		return api.request(`/api/images/${imageId}/build-logs?limit=${limit}`);
+	},
+
+	// 获取镜像详情
+	async getImageDetail(imageId) {
+		return api.request(`/api/images/${imageId}`);
+	},
+
 	// Container file management API
 	async updateServiceFiles(serviceId, formData) {
 		return api.request(`/api/services/${serviceId}/files/update`, {

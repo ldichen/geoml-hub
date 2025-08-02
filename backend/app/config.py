@@ -64,6 +64,12 @@ class Settings(BaseSettings):
     
     # Service Configuration (updated for mManager)
     service_domain: str = "localhost"
+    
+    # Harbor Configuration
+    harbor_url: str = "http://localhost:8080"
+    harbor_username: str = "admin"
+    harbor_password: str = "Harbor12345"
+    harbor_default_project: str = "geoml-hub"
 
     # Logging
     log_level: str = "INFO"
