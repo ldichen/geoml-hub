@@ -39,7 +39,7 @@
                 order: sortOrder
             };
 
-            const response = await api.admin.getRepositories(params);
+            const response = await api.listRepositories(params);
             repositories = response.repositories || [];
             totalRepositories = response.total || 0;
         } catch (err) {

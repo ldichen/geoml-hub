@@ -7,10 +7,13 @@ const Loading = create_ssr_component(($$result, $$props, $$bindings, slots) => {
   let $_, $$unsubscribe__;
   $$unsubscribe__ = subscribe($format, (value) => $_ = value);
   let { text = "" } = $$props;
+  let { message = "" } = $$props;
   let { size = "md" } = $$props;
   let { center = false } = $$props;
   if ($$props.text === void 0 && $$bindings.text && text !== void 0)
     $$bindings.text(text);
+  if ($$props.message === void 0 && $$bindings.message && message !== void 0)
+    $$bindings.message(message);
   if ($$props.size === void 0 && $$bindings.size && size !== void 0)
     $$bindings.size(size);
   if ($$props.center === void 0 && $$bindings.center && center !== void 0)
@@ -26,7 +29,7 @@ const Loading = create_ssr_component(($$result, $$props, $$bindings, slots) => {
     lg: "text-lg"
   };
   $$unsubscribe__();
-  return `<div class="${"flex items-center space-x-3 " + escape(center ? "justify-center" : "", true)}"><div class="${"animate-spin rounded-full border-2 border-secondary-200 dark:border-secondary-700 border-t-primary-600 dark:border-t-primary-400 " + escape(sizeClasses[size], true)}"></div> ${text ? `<span class="${"text-secondary-600 dark:text-dark-500 " + escape(textSizeClasses[size], true)}">${escape(text)}</span>` : `<span class="${"text-secondary-600 dark:text-dark-500 " + escape(textSizeClasses[size], true)}">${escape($_("common.loading"))}</span>`}</div>`;
+  return `<div class="${"flex items-center space-x-3 " + escape(center ? "justify-center" : "", true)}"><div class="${"animate-spin rounded-full border-2 border-secondary-200 dark:border-secondary-700 border-t-primary-600 dark:border-t-primary-400 " + escape(sizeClasses[size], true)}"></div> ${message || text ? `<span class="${"text-secondary-600 dark:text-dark-500 " + escape(textSizeClasses[size], true)}">${escape(message || text)}</span>` : `<span class="${"text-secondary-600 dark:text-dark-500 " + escape(textSizeClasses[size], true)}">${escape($_("common.loading"))}</span>`}</div>`;
 });
 export {
   Loading as L

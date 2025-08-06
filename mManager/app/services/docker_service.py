@@ -102,7 +102,8 @@ class DockerService:
             # 网络配置
             if config.network_mode:
                 create_kwargs['network_mode'] = config.network_mode
-            elif settings.default_network:
+            elif settings.default_network and settings.default_network.strip():
+                # 只有当 default_network 不为空且非空白字符串时才使用
                 create_kwargs['network'] = settings.default_network
             
             # 异步执行Docker操作
@@ -377,7 +378,7 @@ class DockerService:
                 ip_address=ip_address,
                 resource_limits=resource_limits,
                 labels=config.get('Labels', {}),
-                environment=config.get('Env', []),
+                environment=self._parse_environment_vars(config.get('Env', [])),
                 mounts=mounts
             )
             
@@ -612,6 +613,25 @@ class DockerService:
                 container_port = f"{container_port}/tcp"
             formatted[container_port] = host_port
         return formatted
+    
+    def _parse_environment_vars(self, env_list: List[str]) -> Dict[str, str]:
+        """解析环境变量列表为字典
+        
+        Args:
+            env_list: Docker环境变量列表，格式如 ['VAR1=value1', 'VAR2=value2']
+            
+        Returns:
+            字典格式的环境变量 {'VAR1': 'value1', 'VAR2': 'value2'}
+        """
+        env_dict = {}
+        for env_var in env_list:
+            if '=' in env_var:
+                key, value = env_var.split('=', 1)  # 只分割第一个=号
+                env_dict[key] = value
+            else:
+                # 处理没有值的环境变量
+                env_dict[env_var] = ''
+        return env_dict
 
 # 全局Docker服务实例
 docker_service = DockerService()

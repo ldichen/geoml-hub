@@ -55,9 +55,9 @@
       error = null;
 
       const [metricsData, resourceData, healthData] = await Promise.all([
-        api.repositories.getServiceMetrics(service.id).catch(() => null),
-        api.repositories.getServiceResourceUsage(service.id).catch(() => null),
-        api.repositories.getServiceHealthHistory(service.id, { page: 1, size: 10 }).catch(() => ({ checks: [] }))
+        api.getServiceMetrics(service.id).catch(() => null),
+        api.getServiceResourceUsage(service.id).catch(() => null),
+        api.getServiceHealth(service.id).catch(() => ({ checks: [] }))
       ]);
 
       metrics = metricsData;
@@ -75,7 +75,7 @@
 
   async function triggerHealthCheck() {
     try {
-      await api.repositories.triggerHealthCheck(service.id);
+      await api.triggerHealthCheck(service.id);
       // Refresh data after health check
       setTimeout(() => loadMonitoringData(), 2000);
     } catch (err) {

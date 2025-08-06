@@ -5,7 +5,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
+from app.database import get_async_db
 from app.dependencies import get_current_user
 from app.models.user import User
 from app.services.image_service import image_management_service
@@ -19,14 +19,14 @@ from app.utils.logger import logger
 router = APIRouter()
 
 
-@router.post("/repositories/{repository_id}/images/upload", response_model=ImageUploadResponse)
+@router.post("/repositories/{repository_id}/upload", response_model=ImageUploadResponse)
 async def upload_image(
     repository_id: int,
     image_file: UploadFile = File(..., description="Docker镜像tar包"),
     name: str = Form(..., min_length=1, max_length=255, description="镜像名称"),
     tag: str = Form("latest", min_length=1, max_length=100, description="镜像标签"),
     description: str = Form("", max_length=1000, description="镜像描述"),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user)
 ):
     """
@@ -80,20 +80,22 @@ async def upload_image(
         )
 
 
-@router.get("/repositories/{repository_id}/images")
+@router.get("/repositories/{repository_id}")
 async def list_images(
     repository_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: AsyncSession = Depends(get_async_db),
+    current_user: Optional[User] = Depends(get_current_user)
 ):
     """
     列出仓库的所有镜像
     """
     try:
+        # 对于公开仓库，允许匿名访问
+        user_id = current_user.id if current_user else None
         images = await image_management_service.list_repository_images(
             db=db,
             repository_id=repository_id,
-            user_id=current_user.id
+            user_id=user_id
         )
         
         return {
@@ -104,13 +106,16 @@ async def list_images(
         
     except Exception as e:
         logger.error(f"列出镜像API失败: {e}")
+        if "仓库不存在" in str(e):
+            from app.middleware.error_handler import NotFoundError
+            raise NotFoundError(str(e))
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/images/{image_id}/services")
+@router.get("/{image_id}/services")
 async def list_image_services(
     image_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user)
 ):
     """
@@ -134,26 +139,25 @@ async def list_image_services(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/images/{image_id}/services/create")
+@router.post("/{image_id}/services/create")
 async def create_service_from_image(
     image_id: int,
-    service_name: str = Form(..., description="服务名称"),
     description: str = Form("", description="服务描述"),
     cpu_limit: str = Form("0.5", description="CPU限制"),
     memory_limit: str = Form("512m", description="内存限制"),
     gradio_port: Optional[int] = Form(None, description="Gradio端口"),
     is_public: bool = Form(False, description="是否公开"),
     priority: int = Form(2, description="优先级"),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    基于镜像创建模型服务
+    基于镜像创建模型服务（服务名称将根据镜像信息自动生成）
     """
     try:
-        # 构建服务配置
+        # 构建服务配置（服务名称将自动生成）
         service_config = {
-            "service_name": service_name,
+            "service_name": "temp",  # 临时名称，实际会被自动生成的名称覆盖
             "description": description,
             "cpu_limit": cpu_limit,
             "memory_limit": memory_limit,
@@ -196,11 +200,11 @@ async def create_service_from_image(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.delete("/images/{image_id}")
+@router.delete("/{image_id}")
 async def delete_image(
     image_id: int,
     force: bool = False,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user)
 ):
     """
@@ -236,19 +240,19 @@ async def delete_image(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/images/{image_id}/build-logs")
+@router.get("/{image_id}/build-logs")
 async def get_image_build_logs(
     image_id: int,
     limit: int = 100,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_async_db),
     current_user: User = Depends(get_current_user)
 ):
     """
     获取镜像构建日志
     """
     try:
-        from sqlalchemy import select, and_
-        from app.models.image import ImageBuildLog, Image
+        from sqlalchemy import select
+        from app.models.image import ImageBuildLog
         
         # 验证权限
         await image_management_service._get_image_with_validation(db, image_id, current_user.id)

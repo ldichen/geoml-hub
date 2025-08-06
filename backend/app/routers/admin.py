@@ -19,6 +19,8 @@ from app.schemas.user import UserProfile
 from app.schemas.repository import RepositoryListItem
 from app.services.minio_service import minio_service
 from app.services.file_upload_service import FileUploadService
+from app.services.mmanager_client import mmanager_client
+from app.services.harbor_client import HarborClient
 from app.config import settings
 from datetime import datetime, timedelta, timezone
 import logging
@@ -764,3 +766,518 @@ async def get_repositories_stats(
             for repo in top_repos
         ],
     }
+
+
+# mManager控制器管理相关API
+
+@router.get("/mmanager/controllers")
+async def get_mmanager_controllers(
+    admin_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_async_db),
+) -> Dict[str, Any]:
+    """获取mManager控制器状态"""
+    try:
+        status = await mmanager_client.get_controller_status(db)
+        return {
+            "status": "success",
+            "data": status
+        }
+    except Exception as e:
+        logger.error(f"获取控制器状态失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取控制器状态失败: {str(e)}")
+
+
+@router.post("/mmanager/controllers/sync")
+async def sync_mmanager_controllers(
+    admin_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_async_db),
+) -> Dict[str, Any]:
+    """手动同步mManager控制器配置"""
+    try:
+        await mmanager_client.sync_controllers(db)
+        return {
+            "status": "success",
+            "message": "控制器配置同步完成"
+        }
+    except Exception as e:
+        logger.error(f"控制器同步失败: {e}")
+        raise HTTPException(status_code=500, detail=f"控制器同步失败: {str(e)}")
+
+
+@router.post("/mmanager/controllers/{controller_id}/health-check")
+async def trigger_controller_health_check(
+    controller_id: str = Path(..., description="控制器ID"),
+    admin_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_async_db),
+) -> Dict[str, Any]:
+    """触发特定控制器的健康检查"""
+    try:
+        if controller_id not in mmanager_client.controllers:
+            raise HTTPException(status_code=404, detail="控制器不存在")
+        
+        client = mmanager_client.controllers[controller_id]
+        health_data = await client.health_check()
+        
+        # 更新数据库
+        from sqlalchemy import update
+        from app.models.container_registry import MManagerController
+        
+        await db.execute(
+            update(MManagerController)
+            .where(MManagerController.controller_id == controller_id)
+            .values(
+                status="healthy",
+                last_check_at=func.now(),
+                health_data=health_data,
+                error_message=None,
+                consecutive_failures=0,
+            )
+        )
+        await db.commit()
+        
+        return {
+            "status": "success",
+            "message": f"控制器 {controller_id} 健康检查完成",
+            "health_data": health_data
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"控制器健康检查失败: {e}")
+        
+        # 更新失败状态
+        from sqlalchemy import update
+        from app.models.container_registry import MManagerController
+        
+        await db.execute(
+            update(MManagerController)
+            .where(MManagerController.controller_id == controller_id)
+            .values(
+                status="unhealthy",
+                last_check_at=func.now(),
+                error_message=str(e),
+                consecutive_failures=MManagerController.consecutive_failures + 1,
+            )
+        )
+        await db.commit()
+        
+        raise HTTPException(status_code=500, detail=f"健康检查失败: {str(e)}")
+
+
+@router.get("/mmanager/containers")
+async def get_mmanager_containers(
+    controller_id: Optional[str] = Query(None, description="筛选特定控制器"),
+    status: Optional[str] = Query(None, description="筛选容器状态"),
+    admin_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_async_db),
+) -> Dict[str, Any]:
+    """获取所有容器注册信息"""
+    try:
+        from app.models.service import ModelService
+        
+        query = select(ModelService).options(selectinload(ModelService.image)).where(ModelService.container_id.isnot(None))
+        
+        if controller_id:
+            query = query.where(ModelService.model_ip == controller_id)
+        
+        if status:
+            query = query.where(ModelService.status == status)
+        
+        query = query.order_by(desc(ModelService.created_at))
+        
+        result = await db.execute(query)
+        services = result.scalars().all()
+        
+        container_list = []
+        for service in services:
+            container_info = {
+                "id": service.id,
+                "container_id": service.container_id,
+                "service_id": service.id,
+                "controller_id": service.model_ip,
+                "controller_url": f"http://{service.model_ip}:8000",
+                "container_name": service.service_name,
+                "image_name": service.image.docker_image if service.image else "unknown",
+                "status": service.status,
+                "host_port": service.gradio_port,
+                "container_port": service.gradio_port,
+                "ip_address": service.model_ip,
+                "created_at": service.created_at.isoformat() if service.created_at else None,
+                "last_sync_at": service.last_heartbeat.isoformat() if service.last_heartbeat else None,
+                "health_status": service.health_status,
+                "resource_allocation": {"cpu": service.cpu_limit, "memory": service.memory_limit},
+                "resource_usage": {
+                    "cpu_percent": float(service.cpu_usage_percent) if service.cpu_usage_percent else 0,
+                    "memory_bytes": service.memory_usage_bytes or 0
+                },
+            }
+            container_list.append(container_info)
+        
+        return {
+            "status": "success",
+            "data": {
+                "containers": container_list,
+                "total": len(container_list),
+                "filters": {
+                    "controller_id": controller_id,
+                    "status": status
+                }
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"获取容器信息失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取容器信息失败: {str(e)}")
+
+
+@router.delete("/mmanager/containers/{container_id}")
+async def cleanup_container_registry(
+    container_id: str = Path(..., description="容器ID"),
+    force: bool = Query(False, description="强制清理（即使容器仍在运行）"),
+    admin_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_async_db),
+) -> Dict[str, Any]:
+    """清理容器注册记录"""
+    try:
+        from app.models.container_registry import ContainerRegistry
+        
+        # 查找容器记录
+        result = await db.execute(
+            select(ContainerRegistry).where(ContainerRegistry.container_id == container_id)
+        )
+        container = result.scalar_one_or_none()
+        
+        if not container:
+            raise HTTPException(status_code=404, detail="容器记录不存在")
+        
+        # 检查容器是否还在运行
+        if not force and container.status in ["running", "starting"]:
+            raise HTTPException(
+                status_code=400, 
+                detail="容器仍在运行中，使用 force=true 强制清理"
+            )
+        
+        # 删除记录
+        await db.delete(container)
+        await db.commit()
+        
+        return {
+            "status": "success",
+            "message": f"容器 {container_id} 注册记录已清理"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"清理容器记录失败: {e}")
+        raise HTTPException(status_code=500, detail=f"清理容器记录失败: {str(e)}")
+
+
+@router.get("/mmanager/operations")
+async def get_container_operations(
+    controller_id: Optional[str] = Query(None, description="筛选特定控制器"),
+    service_id: Optional[int] = Query(None, description="筛选特定服务"),
+    operation_type: Optional[str] = Query(None, description="操作类型"),
+    limit: int = Query(50, ge=1, le=100),
+    admin_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_async_db),
+) -> Dict[str, Any]:
+    """获取容器操作历史"""
+    try:
+        from app.models.container_registry import ContainerOperation
+        
+        query = select(ContainerOperation)
+        
+        if controller_id:
+            query = query.where(ContainerOperation.controller_id == controller_id)
+        
+        if service_id:
+            query = query.where(ContainerOperation.service_id == service_id)
+        
+        if operation_type:
+            query = query.where(ContainerOperation.operation_type == operation_type)
+        
+        query = query.order_by(desc(ContainerOperation.started_at)).limit(limit)
+        
+        result = await db.execute(query)
+        operations = result.scalars().all()
+        
+        operation_list = []
+        for op in operations:
+            operation_info = {
+                "id": op.id,
+                "container_id": op.container_id,
+                "service_id": op.service_id,
+                "controller_id": op.controller_id,
+                "operation_type": op.operation_type,
+                "operation_status": op.operation_status,
+                "operation_details": op.operation_details,
+                "error_message": op.error_message,
+                "started_at": op.started_at.isoformat() if op.started_at else None,
+                "completed_at": op.completed_at.isoformat() if op.completed_at else None,
+                "duration_seconds": op.duration_seconds,
+                "user_id": op.user_id,
+                "automated": op.automated,
+            }
+            operation_list.append(operation_info)
+        
+        return {
+            "status": "success",
+            "data": {
+                "operations": operation_list,
+                "total": len(operation_list),
+                "filters": {
+                    "controller_id": controller_id,
+                    "service_id": service_id,
+                    "operation_type": operation_type,
+                    "limit": limit
+                }
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"获取操作历史失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取操作历史失败: {str(e)}")
+
+
+# Harbor镜像管理相关API
+
+@router.get("/harbor/images/check")
+async def check_harbor_image_consistency(
+    admin_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_async_db),
+) -> Dict[str, Any]:
+    """检查Harbor镜像与数据库记录的一致性"""
+    try:
+        from app.models.image import Image
+        
+        # 获取数据库中的所有镜像记录
+        db_images_query = select(Image).where(Image.status == 'ready')
+        db_images_result = await db.execute(db_images_query)
+        db_images = db_images_result.scalars().all()
+        
+        # 转换为字典格式便于Harbor客户端处理
+        db_images_data = [
+            {
+                'id': img.id,
+                'original_name': img.original_name,
+                'original_tag': img.original_tag,
+                'harbor_storage_name': img.harbor_storage_name,
+                'status': img.status,
+                'created_at': img.created_at.isoformat() if img.created_at else None,
+                'repository_id': img.repository_id
+            }
+            for img in db_images
+        ]
+        
+        # 使用Harbor客户端检查一致性
+        async with HarborClient() as harbor_client:
+            consistency_check = await harbor_client.compare_with_database_images(db_images_data)
+            storage_usage = await harbor_client.get_harbor_storage_usage()
+        
+        return {
+            "status": "success",
+            "consistency_check": consistency_check,
+            "storage_usage": storage_usage,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Harbor镜像一致性检查失败: {e}")
+        raise HTTPException(status_code=500, detail=f"检查失败: {str(e)}")
+
+
+@router.post("/harbor/images/cleanup")
+async def cleanup_harbor_orphan_images(
+    dry_run: bool = Query(True, description="是否为模拟运行（不实际删除）"),
+    admin_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_async_db),
+) -> Dict[str, Any]:
+    """清理Harbor中的孤立镜像"""
+    try:
+        from app.models.image import Image
+        
+        # 获取数据库中的所有镜像记录
+        db_images_query = select(Image).where(Image.status == 'ready')
+        db_images_result = await db.execute(db_images_query)
+        db_images = db_images_result.scalars().all()
+        
+        # 转换为字典格式
+        db_images_data = [
+            {
+                'id': img.id,
+                'original_name': img.original_name,
+                'original_tag': img.original_tag,
+                'harbor_storage_name': img.harbor_storage_name,
+                'status': img.status,
+                'created_at': img.created_at.isoformat() if img.created_at else None,
+                'repository_id': img.repository_id
+            }
+            for img in db_images
+        ]
+        
+        # 获取孤立镜像并清理
+        async with HarborClient() as harbor_client:
+            # 检查一致性获取孤立镜像
+            consistency_check = await harbor_client.compare_with_database_images(db_images_data)
+            orphan_images = consistency_check.get('orphan_images', [])
+            
+            if not orphan_images:
+                return {
+                    "status": "success",
+                    "message": "没有发现孤立镜像",
+                    "summary": consistency_check.get('summary', {}),
+                    "dry_run": dry_run,
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
+            
+            # 清理孤立镜像
+            cleanup_results = await harbor_client.cleanup_orphan_images(orphan_images, dry_run=dry_run)
+        
+        return {
+            "status": "success",
+            "message": f"{'模拟' if dry_run else '实际'}清理完成",
+            "cleanup_results": cleanup_results,
+            "summary": consistency_check.get('summary', {}),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Harbor镜像清理失败: {e}")
+        raise HTTPException(status_code=500, detail=f"清理失败: {str(e)}")
+
+
+@router.get("/harbor/images/list")
+async def list_harbor_images(
+    project_name: Optional[str] = Query(None, description="项目名称"),
+    admin_user: User = Depends(require_admin),
+) -> Dict[str, Any]:
+    """列出Harbor中的所有镜像"""
+    try:
+        async with HarborClient() as harbor_client:
+            # 检查Harbor连接
+            connectivity = await harbor_client.check_harbor_connectivity()
+            if connectivity.get('status') != 'connected':
+                raise HTTPException(status_code=503, detail=f"Harbor连接失败: {connectivity.get('message')}")
+            
+            # 获取所有镜像
+            harbor_images = await harbor_client.get_all_harbor_images(project_name)
+            storage_usage = await harbor_client.get_harbor_storage_usage()
+        
+        return {
+            "status": "success",
+            "images": harbor_images,
+            "storage_usage": storage_usage,
+            "total_images": len(harbor_images),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"获取Harbor镜像列表失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取镜像列表失败: {str(e)}")
+
+
+@router.delete("/harbor/images/{project_name}/{repository_name}")
+async def delete_harbor_repository(
+    project_name: str = Path(..., description="项目名称"),
+    repository_name: str = Path(..., description="仓库名称"),
+    confirm: bool = Query(False, description="确认删除"),
+    admin_user: User = Depends(require_admin),
+) -> Dict[str, Any]:
+    """删除Harbor中的特定仓库（及其所有镜像）"""
+    if not confirm:
+        raise HTTPException(status_code=400, detail="需要确认删除操作")
+    
+    try:
+        async with HarborClient() as harbor_client:
+            # 检查仓库是否存在
+            repository_info = await harbor_client.get_repository(project_name, repository_name)
+            if not repository_info:
+                raise HTTPException(status_code=404, detail="仓库不存在")
+            
+            # 删除仓库
+            success = await harbor_client.delete_repository(project_name, repository_name)
+            
+            if success:
+                return {
+                    "status": "success",
+                    "message": f"仓库 {project_name}/{repository_name} 已删除",
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
+            else:
+                raise HTTPException(status_code=500, detail="删除操作失败")
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"删除Harbor仓库失败: {e}")
+        raise HTTPException(status_code=500, detail=f"删除失败: {str(e)}")
+
+
+@router.delete("/harbor/images/{project_name}/{repository_name}/{digest}")
+async def delete_harbor_artifact(
+    project_name: str = Path(..., description="项目名称"),
+    repository_name: str = Path(..., description="仓库名称"),
+    digest: str = Path(..., description="镜像摘要"),
+    confirm: bool = Query(False, description="确认删除"),
+    admin_user: User = Depends(require_admin),
+) -> Dict[str, Any]:
+    """删除Harbor中的特定镜像artifact"""
+    if not confirm:
+        raise HTTPException(status_code=400, detail="需要确认删除操作")
+    
+    try:
+        async with HarborClient() as harbor_client:
+            # 删除artifact
+            success = await harbor_client.delete_artifact(project_name, repository_name, digest)
+            
+            if success:
+                return {
+                    "status": "success",
+                    "message": f"镜像 {project_name}/{repository_name}@{digest} 已删除",
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
+            else:
+                raise HTTPException(status_code=500, detail="删除操作失败")
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"删除Harbor镜像失败: {e}")
+        raise HTTPException(status_code=500, detail=f"删除失败: {str(e)}")
+
+
+@router.get("/harbor/status")
+async def get_harbor_status(
+    admin_user: User = Depends(require_admin),
+) -> Dict[str, Any]:
+    """获取Harbor服务状态"""
+    try:
+        async with HarborClient() as harbor_client:
+            connectivity = await harbor_client.check_harbor_connectivity()
+            
+            if connectivity.get('status') == 'connected':
+                storage_usage = await harbor_client.get_harbor_storage_usage()
+                return {
+                    "status": "connected",
+                    "harbor_info": connectivity,
+                    "storage_usage": storage_usage,
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
+            else:
+                return {
+                    "status": "disconnected",
+                    "error": connectivity.get('message'),
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
+                
+    except Exception as e:
+        logger.error(f"获取Harbor状态失败: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }

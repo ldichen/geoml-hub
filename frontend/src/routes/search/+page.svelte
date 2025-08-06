@@ -59,7 +59,7 @@
         
         try {
             if (searchType === 'repositories' || searchType === 'all') {
-                const repoResponse = await api.getRepositories({
+                const repoResponse = await api.listRepositories({
                     q: searchQuery,
                     repo_type: filters.repo_type || undefined,
                     classification_id: filters.classification_id || undefined,

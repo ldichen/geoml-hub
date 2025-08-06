@@ -45,7 +45,7 @@
 			// 并行加载仓库信息和文件内容
 			const [repoResponse, fileResponse] = await Promise.all([
 				api.getRepository(username, repositoryName),
-				api.repositories.getFileContent(username, repositoryName, filePath)
+				api.getRepositoryFileContent(username, repositoryName, filePath)
 			]);
 			
 			repository = repoResponse;

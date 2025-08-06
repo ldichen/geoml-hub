@@ -84,7 +84,7 @@
         is_public: formData.is_public
       };
 
-      await api.repositories.updateService(service.id, updateData);
+      await api.updateService(service.id, updateData);
       
       dispatch('updated', formData);
       handleClose();
@@ -101,7 +101,7 @@
     try {
       regeneratingToken = true;
       
-      const response = await api.repositories.regenerateAccessToken(service.id, {
+      const response = await api.generateAccessToken(service.id, {
         regenerate_token: true
       });
       

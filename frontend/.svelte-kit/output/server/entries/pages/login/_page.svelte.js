@@ -1,6 +1,5 @@
 import { s as subscribe } from "../../../chunks/utils.js";
 import { c as create_ssr_component, e as escape, b as add_attribute } from "../../../chunks/ssr.js";
-import "../../../chunks/api.js";
 import { $ as $format } from "../../../chunks/runtime.esm.js";
 const _page_svelte_svelte_type_style_lang = "";
 const css = {

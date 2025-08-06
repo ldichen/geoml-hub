@@ -1,10 +1,10 @@
 import { c as create_ssr_component, v as validate_component, e as escape, b as add_attribute, a as createEventDispatcher, d as each } from "./ssr.js";
-import { I as Icon, S as Star, D as Download, E as Eye, C as Calendar } from "./star.js";
+import { I as Icon } from "./Icon.js";
 import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { s as subscribe } from "./utils.js";
 import { $ as $format } from "./runtime.esm.js";
-import "./api.js";
+import { S as Star, D as Download, E as Eye, C as Calendar } from "./star.js";
 /* empty css                                              */const Chevron_right = create_ssr_component(($$result, $$props, $$bindings, slots) => {
   const iconNode = [["path", { "d": "m9 18 6-6-6-6" }]];
   return `${validate_component(Icon, "Icon").$$render($$result, Object.assign({}, { name: "chevron-right" }, $$props, { iconNode }), {}, {
@@ -14,50 +14,6 @@ import "./api.js";
   })}`;
 });
 const ChevronRight = Chevron_right;
-const File_text = create_ssr_component(($$result, $$props, $$bindings, slots) => {
-  const iconNode = [
-    [
-      "path",
-      {
-        "d": "M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"
-      }
-    ],
-    ["polyline", { "points": "14 2 14 8 20 8" }],
-    [
-      "line",
-      {
-        "x1": "16",
-        "x2": "8",
-        "y1": "13",
-        "y2": "13"
-      }
-    ],
-    [
-      "line",
-      {
-        "x1": "16",
-        "x2": "8",
-        "y1": "17",
-        "y2": "17"
-      }
-    ],
-    [
-      "line",
-      {
-        "x1": "10",
-        "x2": "8",
-        "y1": "9",
-        "y2": "9"
-      }
-    ]
-  ];
-  return `${validate_component(Icon, "Icon").$$render($$result, Object.assign({}, { name: "file-text" }, $$props, { iconNode }), {}, {
-    default: () => {
-      return `${slots.default ? slots.default({}) : ``}`;
-    }
-  })}`;
-});
-const FileText = File_text;
 const Git_fork = create_ssr_component(($$result, $$props, $$bindings, slots) => {
   const iconNode = [
     ["circle", { "cx": "12", "cy": "18", "r": "3" }],
@@ -159,23 +115,6 @@ const Share_2 = create_ssr_component(($$result, $$props, $$bindings, slots) => {
   })}`;
 });
 const Share2 = Share_2;
-const Tag = create_ssr_component(($$result, $$props, $$bindings, slots) => {
-  const iconNode = [
-    [
-      "path",
-      {
-        "d": "M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"
-      }
-    ],
-    ["path", { "d": "M7 7h.01" }]
-  ];
-  return `${validate_component(Icon, "Icon").$$render($$result, Object.assign({}, { name: "tag" }, $$props, { iconNode }), {}, {
-    default: () => {
-      return `${slots.default ? slots.default({}) : ``}`;
-    }
-  })}`;
-});
-const Tag$1 = Tag;
 const User_minus = create_ssr_component(($$result, $$props, $$bindings, slots) => {
   const iconNode = [
     [
@@ -254,62 +193,38 @@ const User = create_ssr_component(($$result, $$props, $$bindings, slots) => {
   })}`;
 });
 const User$1 = User;
-function getSizeClasses$1(size) {
-  switch (size) {
-    case "xs":
-      return "h-6 w-6";
-    case "sm":
-      return "h-8 w-8";
-    case "md":
-      return "h-10 w-10";
-    case "lg":
-      return "h-12 w-12";
-    case "xl":
-      return "h-16 w-16";
-    default:
-      return "h-10 w-10";
-  }
-}
-function getIconSizeClasses$1(size) {
-  switch (size) {
-    case "xs":
-      return "h-3 w-3";
-    case "sm":
-      return "h-4 w-4";
-    case "md":
-      return "h-5 w-5";
-    case "lg":
-      return "h-6 w-6";
-    case "xl":
-      return "h-8 w-8";
-    default:
-      return "h-5 w-5";
-  }
-}
-function getTextSizeClasses(size) {
-  switch (size) {
-    case "xs":
-      return "text-xs";
-    case "sm":
-      return "text-sm";
-    case "md":
-      return "text-base";
-    case "lg":
-      return "text-lg";
-    case "xl":
-      return "text-xl";
-    default:
-      return "text-base";
-  }
-}
-function generateInitials(name) {
-  return name.split(" ").map((word) => word.charAt(0)).join("").toUpperCase().slice(0, 2);
-}
-function generateColorFromUsername(username) {
-  let hash = 0;
-  for (let i = 0; i < username.length; i++) {
-    hash = username.charCodeAt(i) + ((hash << 5) - hash);
-  }
+const UserAvatar = create_ssr_component(($$result, $$props, $$bindings, slots) => {
+  let sizeClasses;
+  let iconSizeClasses;
+  let textSizeClasses;
+  let userInitials;
+  let userColor;
+  let { user = null } = $$props;
+  let { size = "md" } = $$props;
+  let { showName = false } = $$props;
+  let { showUsername = false } = $$props;
+  let { clickable = true } = $$props;
+  const sizeClassMap = {
+    xs: "h-6 w-6",
+    sm: "h-8 w-8",
+    md: "h-10 w-10",
+    lg: "h-12 w-12",
+    xl: "h-16 w-16"
+  };
+  const iconSizeClassMap = {
+    xs: "h-3 w-3",
+    sm: "h-4 w-4",
+    md: "h-5 w-5",
+    lg: "h-6 w-6",
+    xl: "h-8 w-8"
+  };
+  const textSizeClassMap = {
+    xs: "text-xs",
+    sm: "text-sm",
+    md: "text-base",
+    lg: "text-lg",
+    xl: "text-xl"
+  };
   const colors = [
     "bg-red-500",
     "bg-yellow-500",
@@ -322,14 +237,7 @@ function generateColorFromUsername(username) {
     "bg-teal-500",
     "bg-cyan-500"
   ];
-  return colors[Math.abs(hash) % colors.length];
-}
-const UserAvatar = create_ssr_component(($$result, $$props, $$bindings, slots) => {
-  let { user = null } = $$props;
-  let { size = "md" } = $$props;
-  let { showName = false } = $$props;
-  let { showUsername = false } = $$props;
-  let { clickable = true } = $$props;
+  let imageError = false;
   if ($$props.user === void 0 && $$bindings.user && user !== void 0)
     $$bindings.user(user);
   if ($$props.size === void 0 && $$bindings.size && size !== void 0)
@@ -340,14 +248,32 @@ const UserAvatar = create_ssr_component(($$result, $$props, $$bindings, slots) =
     $$bindings.showUsername(showUsername);
   if ($$props.clickable === void 0 && $$bindings.clickable && clickable !== void 0)
     $$bindings.clickable(clickable);
-  return `<div class="flex items-center space-x-2"> <div class="relative">${clickable && user ? `<a href="${"/" + escape(user.username, true)}" class="block"><div class="${"relative " + escape(getSizeClasses$1(size), true) + " rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700 flex items-center justify-center"}">${user.avatar_url ? `<img${add_attribute("src", user.avatar_url, 0)}${add_attribute("alt", user.full_name || user.username, 0)} class="h-full w-full object-cover" loading="lazy">` : `${user.full_name ? `<div class="${"h-full w-full flex items-center justify-center text-white font-semibold " + escape(generateColorFromUsername(user.username), true) + " " + escape(getTextSizeClasses(size), true)}">${escape(generateInitials(user.full_name))}</div>` : `<div class="${"h-full w-full flex items-center justify-center text-white font-semibold " + escape(generateColorFromUsername(user.username), true) + " " + escape(getTextSizeClasses(size), true)}">${escape(user.username.charAt(0).toUpperCase())}</div>`}`}</div></a>` : `${user ? `<div class="${"relative " + escape(getSizeClasses$1(size), true) + " rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700 flex items-center justify-center"}">${user.avatar_url ? `<img${add_attribute("src", user.avatar_url, 0)}${add_attribute("alt", user.full_name || user.username, 0)} class="h-full w-full object-cover" loading="lazy">` : `${user.full_name ? `<div class="${"h-full w-full flex items-center justify-center text-white font-semibold " + escape(generateColorFromUsername(user.username), true) + " " + escape(getTextSizeClasses(size), true)}">${escape(generateInitials(user.full_name))}</div>` : `<div class="${"h-full w-full flex items-center justify-center text-white font-semibold " + escape(generateColorFromUsername(user.username), true) + " " + escape(getTextSizeClasses(size), true)}">${escape(user.username.charAt(0).toUpperCase())}</div>`}`}</div>` : `<div class="${"relative " + escape(getSizeClasses$1(size), true) + " rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700 flex items-center justify-center"}">${validate_component(User$1, "User").$$render(
+  sizeClasses = sizeClassMap[size] || sizeClassMap.md;
+  iconSizeClasses = iconSizeClassMap[size] || iconSizeClassMap.md;
+  textSizeClasses = textSizeClassMap[size] || textSizeClassMap.md;
+  userInitials = user?.full_name ? user.full_name.split(" ").map((word) => word.charAt(0)).join("").toUpperCase().slice(0, 2) : user?.username?.charAt(0).toUpperCase() || "";
+  userColor = user?.username ? (() => {
+    let hash = 0;
+    for (let i = 0; i < user.username.length; i++) {
+      hash = user.username.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return colors[Math.abs(hash) % colors.length];
+  })() : "bg-gray-500";
+  return `<div class="flex items-center space-x-2"> <div class="relative">${clickable && user ? `<a href="${"/" + escape(user.username, true)}" class="block"><div class="${"relative " + escape(sizeClasses, true) + " rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700 flex items-center justify-center"}">${user?.avatar_url && !imageError ? ` <div class="h-full w-full relative">${` <div class="${"h-full w-full flex items-center justify-center text-white font-semibold " + escape(userColor, true) + " " + escape(textSizeClasses, true)}">${escape(userInitials)}</div>`} <img${add_attribute("src", user.avatar_url, 0)}${add_attribute("alt", user.full_name || user.username, 0)} class="${"h-full w-full object-cover " + escape("opacity-0", true) + " transition-opacity duration-200"}" loading="lazy"></div>` : `${user ? ` <div class="${"h-full w-full flex items-center justify-center text-white font-semibold " + escape(userColor, true) + " " + escape(textSizeClasses, true)}">${escape(userInitials)}</div>` : ` ${validate_component(User$1, "User").$$render(
     $$result,
     {
-      class: "text-gray-500 dark:text-gray-400 " + getIconSizeClasses$1(size)
+      class: "text-gray-500 dark:text-gray-400 " + iconSizeClasses
     },
     {},
     {}
-  )}</div>`}`}  ${size === "lg" || size === "xl" ? `<div class="${"absolute bottom-0 right-0 " + escape(size === "xl" ? "h-4 w-4" : "h-3 w-3", true) + " bg-green-400 border-2 border-white dark:border-gray-800 rounded-full"}"></div>` : ``}</div>  ${(showName || showUsername) && user ? `<div class="flex flex-col">${showName && user.full_name ? `<span class="${"font-medium text-gray-900 dark:text-white " + escape(getTextSizeClasses(size), true)}">${escape(user.full_name)}</span>` : ``} ${showUsername ? `<span class="${"text-gray-500 dark:text-gray-400 " + escape(size === "xs" ? "text-xs" : "text-sm", true)}">@${escape(user.username)}</span>` : ``}</div>` : ``}</div>`;
+  )}`}`}</div></a>` : `<div class="${"relative " + escape(sizeClasses, true) + " rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700 flex items-center justify-center"}">${user?.avatar_url && !imageError ? ` <div class="h-full w-full relative">${` <div class="${"h-full w-full flex items-center justify-center text-white font-semibold " + escape(userColor, true) + " " + escape(textSizeClasses, true)}">${escape(userInitials)}</div>`} <img${add_attribute("src", user.avatar_url, 0)}${add_attribute("alt", user.full_name || user.username, 0)} class="${"h-full w-full object-cover " + escape("opacity-0", true) + " transition-opacity duration-200"}" loading="lazy"></div>` : `${user ? ` <div class="${"h-full w-full flex items-center justify-center text-white font-semibold " + escape(userColor, true) + " " + escape(textSizeClasses, true)}">${escape(userInitials)}</div>` : ` ${validate_component(User$1, "User").$$render(
+    $$result,
+    {
+      class: "text-gray-500 dark:text-gray-400 " + iconSizeClasses
+    },
+    {},
+    {}
+  )}`}`}</div>`}</div>  ${(showName || showUsername) && user ? `<div class="flex flex-col">${showName && user.full_name ? `<span class="${"font-medium text-gray-900 dark:text-white " + escape(textSizeClasses, true)}">${escape(user.full_name)}</span>` : ``} ${showUsername ? `<span class="${"text-gray-500 dark:text-gray-400 " + escape(size === "xs" ? "text-xs" : "text-sm", true)}">@${escape(user.username)}</span>` : ``}</div>` : ``}</div>`;
 });
 function getSizeClasses(size) {
   switch (size) {
@@ -507,7 +433,7 @@ const SocialButton = create_ssr_component(($$result, $$props, $$bindings, slots)
   )}`} <span>${escape(label)}</span> ${count !== null && count > 0 ? `<span class="ml-1 px-1.5 py-0.5 text-xs bg-black/10 dark:bg-white/10 rounded-full">${escape(count)}</span>` : ``}</button>`;
 });
 const css = {
-  code: ".line-clamp-2.svelte-1qbfu85{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.line-clamp-3.svelte-1qbfu85{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}",
+  code: ".repository-card.svelte-uvbnuc{background:linear-gradient(to right, var(--color-gray-50), var(--color-white))}.repository-card.svelte-uvbnuc:hover{background:linear-gradient(to right, var(--color-gray-100), var(--color-gray-50));box-shadow:var(--tw-shadow-hover);cursor:pointer}.line-clamp-2.svelte-uvbnuc{display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.line-clamp-3.svelte-uvbnuc{display:-webkit-box;-webkit-line-clamp:3;line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}",
   map: null
 };
 function formatFileSize(bytes) {
@@ -517,30 +443,6 @@ function formatFileSize(bytes) {
   const sizes = ["B", "KB", "MB", "GB", "TB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-}
-function getRepoTypeLabel(type) {
-  switch (type) {
-    case "model":
-      return "模型";
-    case "dataset":
-      return "数据集";
-    case "space":
-      return "空间";
-    default:
-      return type;
-  }
-}
-function getRepoTypeColor(type) {
-  switch (type) {
-    case "model":
-      return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200";
-    case "dataset":
-      return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200";
-    case "space":
-      return "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200";
-    default:
-      return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200";
-  }
 }
 const RepositoryCard = create_ssr_component(($$result, $$props, $$bindings, slots) => {
   let { repo } = $$props;
@@ -556,9 +458,9 @@ const RepositoryCard = create_ssr_component(($$result, $$props, $$bindings, slot
   if ($$props.compact === void 0 && $$bindings.compact && compact !== void 0)
     $$bindings.compact(compact);
   $$result.css.add(css);
-  return `<div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow"><div class="flex items-start justify-between"><div class="flex-1 min-w-0"> <div class="flex items-center space-x-3 mb-2">${showOwner && repo.owner ? `${validate_component(UserAvatar, "UserAvatar").$$render($$result, { user: repo.owner, size: "sm" }, {}, {})} <span class="text-sm text-gray-600 dark:text-gray-400">${escape(repo.owner.username)}</span> <span class="text-gray-400 dark:text-gray-600" data-svelte-h="svelte-pb799c">/</span>` : ``} <a href="${"/" + escape(repo.owner?.username || "unknown", true) + "/" + escape(repo.name, true)}" class="text-lg font-semibold text-blue-600 dark:text-blue-400 hover:underline truncate">${escape(repo.name)}</a> ${repo.visibility === "private" ? `${validate_component(Lock$1, "Lock").$$render($$result, { class: "h-4 w-4 text-gray-400" }, {}, {})}` : ``}</div>  <div class="flex items-center space-x-2 mb-2"><span class="${"inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium " + escape(getRepoTypeColor(repo.repo_type), true) + " svelte-1qbfu85"}">${escape(getRepoTypeLabel(repo.repo_type))}</span> ${repo.license ? `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200">${escape(repo.license)}</span>` : ``}</div>  ${repo.description ? `<p class="${"text-gray-700 dark:text-gray-300 text-sm mb-3 " + escape(compact ? "line-clamp-2" : "line-clamp-3", true) + " svelte-1qbfu85"}">${escape(repo.description)}</p>` : ``}  ${repo.tags && repo.tags.length > 0 ? `<div class="flex flex-wrap gap-1 mb-3">${each(repo.tags.slice(0, compact ? 3 : 6), (tag) => {
-    return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-200">${validate_component(Tag$1, "Tag").$$render($$result, { class: "h-3 w-3 mr-1" }, {}, {})} ${escape(tag)} </span>`;
-  })} ${repo.tags.length > (compact ? 3 : 6) ? `<span class="text-xs text-gray-500 dark:text-gray-400">+${escape(repo.tags.length - (compact ? 3 : 6))} 更多</span>` : ``}</div>` : ``}  <div class="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400"><div class="flex items-center space-x-1">${validate_component(Star, "Star").$$render($$result, { class: "h-4 w-4" }, {}, {})} <span>${escape(repo.stars_count)}</span></div> <div class="flex items-center space-x-1">${validate_component(Download, "Download").$$render($$result, { class: "h-4 w-4" }, {}, {})} <span>${escape(repo.downloads_count)}</span></div> <div class="flex items-center space-x-1">${validate_component(Eye, "Eye").$$render($$result, { class: "h-4 w-4" }, {}, {})} <span>${escape(repo.views_count)}</span></div> <div class="flex items-center space-x-1">${validate_component(FileText, "FileText").$$render($$result, { class: "h-4 w-4" }, {}, {})} <span>${escape(repo.total_files)} 文件</span></div> ${repo.total_size > 0 ? `<div class="flex items-center space-x-1"><span>${escape(formatFileSize(repo.total_size))}</span></div>` : ``}</div>  <div class="flex items-center space-x-1 text-xs text-gray-500 dark:text-gray-400 mt-2">${validate_component(Calendar, "Calendar").$$render($$result, { class: "h-3 w-3" }, {}, {})} <span>更新于 ${escape(formatDistanceToNow(new Date(repo.updated_at), { addSuffix: true, locale: zhCN }))}</span></div></div>  <div class="flex items-center space-x-2 ml-4">${currentUser && repo.owner?.username !== currentUser.username ? `${validate_component(SocialButton, "SocialButton").$$render(
+  return `<div class="repository-card rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 transition-all duration-200 svelte-uvbnuc"><div class="flex items-start justify-between"><div class="flex-1 min-w-0"> <div class="flex items-center space-x-3 mb-2">${showOwner && repo.owner ? `${validate_component(UserAvatar, "UserAvatar").$$render($$result, { user: repo.owner, size: "sm" }, {}, {})} <span class="text-sm text-gray-600 dark:text-gray-400">${escape(repo.owner.username)}</span> <span class="text-gray-400 dark:text-gray-600" data-svelte-h="svelte-pb799c">/</span>` : ``} <a href="${"/" + escape(repo.owner?.username || "unknown", true) + "/" + escape(repo.name, true)}" class="text-lg font-semibold text-blue-600 dark:text-blue-400 hover:underline truncate">${escape(repo.name)}</a> ${repo.visibility === "private" ? `${validate_component(Lock$1, "Lock").$$render($$result, { class: "h-4 w-4 text-gray-400" }, {}, {})}` : ``}</div>  ${repo.classification_path && repo.classification_path.length > 0 ? `<div class="flex items-center space-x-1 mb-2">${each(repo.classification_path, (classification, index) => {
+    return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200">${escape(classification)}</span> ${index < repo.classification_path.length - 1 ? `${validate_component(ChevronRight, "ChevronRight").$$render($$result, { class: "h-3 w-3 text-gray-400" }, {}, {})}` : ``}`;
+  })}</div>` : ``}  ${repo.description ? `<p class="${"text-gray-700 dark:text-gray-300 text-sm mb-3 " + escape(compact ? "line-clamp-2" : "line-clamp-3", true) + " svelte-uvbnuc"}">${escape(repo.description)}</p>` : ``}  <div class="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400"><div class="flex items-center space-x-1">${validate_component(Star, "Star").$$render($$result, { class: "h-4 w-4" }, {}, {})} <span>${escape(repo.stars_count)}</span></div> <div class="flex items-center space-x-1">${validate_component(Download, "Download").$$render($$result, { class: "h-4 w-4" }, {}, {})} <span>${escape(repo.downloads_count)}</span></div> <div class="flex items-center space-x-1">${validate_component(Eye, "Eye").$$render($$result, { class: "h-4 w-4" }, {}, {})} <span>${escape(repo.views_count)}</span></div> ${repo.total_size > 0 ? `<div class="flex items-center space-x-1"><span>${escape(formatFileSize(repo.total_size))}</span></div>` : ``}</div></div>  <div class="flex flex-col items-end space-y-2 ml-4">${currentUser && repo.owner?.username !== currentUser.username ? `${validate_component(SocialButton, "SocialButton").$$render(
     $$result,
     {
       type: "star",
@@ -567,7 +469,7 @@ const RepositoryCard = create_ssr_component(($$result, $$props, $$bindings, slot
     },
     {},
     {}
-  )}` : ``}</div></div> </div>`;
+  )}` : ``}  <div class="flex items-center space-x-1 text-xs text-gray-500 dark:text-gray-400">${validate_component(Calendar, "Calendar").$$render($$result, { class: "h-3 w-3" }, {}, {})} <span>更新于 ${escape(formatDistanceToNow(new Date(repo.updated_at), { addSuffix: true, locale: zhCN }))}</span></div></div></div> </div>`;
 });
 export {
   ChevronRight as C,

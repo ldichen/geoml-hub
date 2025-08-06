@@ -72,7 +72,7 @@
       error = null;
 
       const [reposResponse, featuredResponse, classificationsResponse] = await Promise.all([
-        api.getRepositories({
+        api.listRepositories({
           page: currentPage,
           per_page: perPage,
           sort_by: sortBy,
@@ -83,7 +83,7 @@
           ...(selectedRepoType && { repo_type: selectedRepoType }),
           ...(searchQuery && { q: searchQuery })
         }),
-        api.getRepositories({
+        api.listRepositories({
           per_page: 8,
           sort_by: 'stars_count',
           sort_order: 'desc',
@@ -186,7 +186,7 @@
           break;
       }
 
-      const response = await api.getRepositories({
+      const response = await api.listRepositories({
         per_page: 10,
         sort_by: sortBy,
         sort_order: sortOrder,

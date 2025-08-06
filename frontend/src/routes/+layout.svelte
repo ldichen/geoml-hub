@@ -6,7 +6,7 @@
   import { waitLocale } from 'svelte-i18n';
   import { theme, setTheme } from '$lib/stores/theme.js';
   import { authToken, user, isAuthenticated } from '$lib/stores/auth.js';
-  import { authApi } from '$lib/utils/api.js';
+  import { api } from '$lib/utils/api.js';
   import Header from '$lib/components/Header.svelte';
   import Footer from '$lib/components/Footer.svelte';
   import ToastContainer from '$lib/components/ToastContainer.svelte';
@@ -63,7 +63,7 @@
     // 验证已存储的认证信息
     if (browser && $authToken) {
       try {
-        const response = await authApi.getCurrentUser();
+        const response = await api.getCurrentUser();
         if (response.success) {
           // 用户信息仍然有效，更新store
           user.set(response.data);
@@ -71,11 +71,11 @@
           console.log('User authenticated:', response.data.username);
         } else {
           // Token无效，清除认证信息
-          authApi.clearToken();
+          api.clearToken();
         }
       } catch (error) {
         console.error('Auth verification failed:', error);
-        authApi.clearToken();
+        api.clearToken();
       }
     }
   });

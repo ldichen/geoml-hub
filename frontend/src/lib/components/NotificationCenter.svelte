@@ -39,7 +39,7 @@
         error = '';
         
         try {
-            const response = await api.notifications.list({
+            const response = await api.getNotifications({
                 page,
                 limit: 20,
                 include_read: true
@@ -72,7 +72,7 @@
     
     async function markAsRead(notificationId) {
         try {
-            await api.notifications.markAsRead(notificationId);
+            await api.markNotificationAsRead(notificationId);
             
             notifications = notifications.map(n => 
                 n.id === notificationId ? { ...n, is_read: true } : n
@@ -93,7 +93,7 @@
         markingAsRead = true;
         
         try {
-            await api.notifications.markAllAsRead();
+            await api.markAllNotificationsAsRead();
             
             notifications = notifications.map(n => ({ ...n, is_read: true }));
             dispatch('unreadCountChange', 0);
@@ -107,7 +107,7 @@
     
     async function deleteNotification(notificationId) {
         try {
-            await api.notifications.delete(notificationId);
+            await api.deleteNotification(notificationId);
             notifications = notifications.filter(n => n.id !== notificationId);
         } catch (err) {
             console.error('Failed to delete notification:', err);

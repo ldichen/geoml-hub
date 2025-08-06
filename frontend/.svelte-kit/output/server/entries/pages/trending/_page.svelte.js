@@ -1,7 +1,6 @@
 import { s as subscribe } from "../../../chunks/utils.js";
 import { c as create_ssr_component, e as escape, b as add_attribute, v as validate_component, d as each } from "../../../chunks/ssr.js";
 import { $ as $format } from "../../../chunks/runtime.esm.js";
-import "../../../chunks/api.js";
 /* empty css                                                            */import { L as Loading } from "../../../chunks/Loading.js";
 import { T as TrendingUp } from "../../../chunks/trending-up.js";
 import { F as Filter } from "../../../chunks/filter.js";

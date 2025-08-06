@@ -39,7 +39,7 @@
     
     async function loadRepository() {
         try {
-            repository = await api.repositories.get(username, repositoryName);
+            repository = await api.getRepository(username, repositoryName);
         } catch (err) {
             console.error('Failed to load repository:', err);
             error = $_('error.not_found');
@@ -76,7 +76,7 @@
             uploadFiles = [...uploadFiles]; // 触发响应式更新
             
             try {
-                const result = await api.repositories.uploadFile(
+                const result = await api.uploadRepositoryFile(
                     username,
                     repositoryName,
                     fileItem.file,

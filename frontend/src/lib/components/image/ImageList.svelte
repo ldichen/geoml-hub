@@ -90,12 +90,6 @@
 <div class="image-list">
 	<!-- 头部操作栏 -->
 	<div class="flex justify-between items-center mb-6">
-		<div>
-			<h3 class="text-lg font-semibold text-gray-900">Docker镜像</h3>
-			<p class="text-sm text-gray-500 mt-1">
-				管理仓库的Docker镜像，每个仓库最多3个镜像
-			</p>
-		</div>
 		
 		{#if canManage}
 			<button
@@ -111,8 +105,8 @@
 		{/if}
 	</div>
 
-	<!-- 镜像数量统计 -->
-	{#if !loading}
+	<!-- 镜像数量统计 (只对有管理权限的用户显示) -->
+	{#if !loading && canManage}
 		<div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
 			<div class="flex items-center">
 				<svg class="w-5 h-5 text-blue-400 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -156,10 +150,12 @@
 			<svg class="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4V2a1 1 0 011-1h8a1 1 0 011 1v2h4a1 1 0 011 1v1a1 1 0 01-1-1V7a1 1 0 01-1-1v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7a1 1 0 01-1-1V5a1 1 0 011-1h4z"></path>
 			</svg>
-			<h3 class="text-lg font-medium text-gray-900 mb-2">暂无镜像</h3>
+			<h3 class="text-lg font-medium text-gray-900 mb-2">暂无可用镜像</h3>
+			{#if canManage}
 			<p class="text-gray-500 mb-4">
-				上传Docker镜像来部署模型服务
+				上传模型镜像来部署模型服务
 			</p>
+			{/if}
 			{#if canManage}
 				<button
 					class="btn btn-primary"
@@ -207,14 +203,26 @@
 	}
 
 	.btn {
-		@apply px-4 py-2 rounded-lg font-medium transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+		@apply px-4 py-2 rounded-lg font-medium transition-colors duration-200;
+	}
+	
+	.btn:disabled {
+		@apply opacity-50 cursor-not-allowed;
 	}
 
 	.btn-primary {
-		@apply bg-blue-600 text-white hover:bg-blue-700;
+		@apply bg-blue-600 text-white;
+	}
+	
+	.btn-primary:hover {
+		@apply bg-blue-700;
 	}
 
 	.btn-outline {
-		@apply border border-gray-300 text-gray-700 hover:bg-gray-50;
+		@apply border border-gray-300 text-gray-700;
+	}
+	
+	.btn-outline:hover {
+		@apply bg-gray-50;
 	}
 </style>

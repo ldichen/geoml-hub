@@ -67,7 +67,7 @@
       if (eventTypeFilter) params.event_type = eventTypeFilter;
       if (searchQuery) params.search = searchQuery;
 
-      const response = await api.repositories.getServiceLogs(service.id, params);
+      const response = await api.getServiceLogs(service.id, params);
       
       if (append && page > 1) {
         logs = [...logs, ...response.logs];

@@ -432,7 +432,11 @@
 
 <style>
 	.btn {
-		@apply px-4 py-2 rounded-lg font-medium transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+		@apply px-4 py-2 rounded-lg font-medium transition-colors duration-200;
+	}
+	
+	.btn:disabled {
+		@apply opacity-50 cursor-not-allowed;
 	}
 
 	.btn-sm {
@@ -440,10 +444,18 @@
 	}
 
 	.btn-primary {
-		@apply bg-blue-600 text-white hover:bg-blue-700;
+		@apply bg-blue-600 text-white;
+	}
+	
+	.btn-primary:hover {
+		@apply bg-blue-700;
 	}
 
 	.btn-danger {
-		@apply bg-red-600 text-white hover:bg-red-700;
+		@apply bg-red-600 text-white;
+	}
+	
+	.btn-danger:hover {
+		@apply bg-red-700;
 	}
 </style>

@@ -24,6 +24,7 @@
   let repository = null;
   let files = [];
   let services = [];
+  let availableImages = []; // 可用镜像列表，用于服务创建
   let loading = true;
   let error = null;
   let activeTab = 'model-card';
@@ -152,7 +153,7 @@
       
       // 加载服务并自动启动（如果是仓库所有者）
       const shouldAutoStart = $currentUser && repository && isOwner(repository.owner?.username || repository.owner?.id);
-      const servicesResponse = await api.repositories.getServices(username, repoName, { 
+      const servicesResponse = await api.getRepositoryServices(username, repoName, { 
         auto_start: shouldAutoStart 
       }).catch(() => ({ items: [], services: [] }));
       
@@ -161,6 +162,27 @@
       // 处理自动启动结果
       if (servicesResponse.auto_start_result) {
         handleAutoStartResult(servicesResponse.auto_start_result);
+      }
+      
+      // 加载可用镜像列表（用于服务创建）
+      try {
+        console.log('Loading images for repository ID:', repository.id);
+        const imagesResponse = await api.getRepositoryImages(repository.id);
+        console.log('Images API response:', imagesResponse);
+        
+        if (imagesResponse && imagesResponse.success) {
+          availableImages = (imagesResponse.data || []).filter(img => img.status === 'ready');
+        } else if (Array.isArray(imagesResponse)) {
+          // 处理直接返回数组的情况
+          availableImages = imagesResponse.filter(img => img.status === 'ready');
+        } else {
+          availableImages = [];
+        }
+        
+        console.log('Available images for service creation:', availableImages);
+      } catch (err) {
+        console.warn('Failed to load available images:', err);
+        availableImages = [];
       }
       
       // 调试：查看数据结构
@@ -802,7 +824,20 @@
   async function handleCreateService(event) {
     try {
       serviceModalLoading = true;
-      await api.repositories.createService(username, repoName, event.detail);
+      
+      const { type, data } = event.detail;
+      
+      let response;
+      if (type === 'docker-upload') {
+        // 为Docker tar包上传，使用专门的端点
+        response = await api.createServiceWithDockerTar(username, repoName, data);
+      } else if (type === 'existing-image') {
+        // 基于已有镜像创建服务，使用标准API
+        response = await api.createService(username, repoName, data);
+      } else {
+        throw new Error(`未知的服务创建类型: ${type}`);
+      }
+      
       showCreateServiceModal = false;
       await loadRepositoryData(); // 重新加载数据
       showNotification('服务创建成功', 'success');
@@ -816,8 +851,20 @@
 
   async function handleStartService(service) {
     try {
-      await api.repositories.startService(service.id);
-      await loadRepositoryData(); // 重新加载数据
+      await api.startService(service.id);
+      
+      // 立即更新本地状态以提供即时反馈
+      const serviceIndex = services.findIndex(s => s.id === service.id);
+      if (serviceIndex !== -1) {
+        services[serviceIndex] = { ...services[serviceIndex], status: 'starting' };
+        services = [...services]; // 触发响应式更新
+      }
+      
+      // 然后异步重新加载完整数据
+      setTimeout(async () => {
+        await loadRepositoryData();
+      }, 1000);
+      
       showNotification(`服务 "${service.service_name}" 正在启动`, 'success');
     } catch (error) {
       console.error('Start service failed:', error);
@@ -827,8 +874,20 @@
 
   async function handleStopService(service) {
     try {
-      await api.repositories.stopService(service.id);
-      await loadRepositoryData(); // 重新加载数据
+      await api.stopService(service.id);
+      
+      // 立即更新本地状态以提供即时反馈
+      const serviceIndex = services.findIndex(s => s.id === service.id);
+      if (serviceIndex !== -1) {
+        services[serviceIndex] = { ...services[serviceIndex], status: 'stopping' };
+        services = [...services]; // 触发响应式更新
+      }
+      
+      // 然后异步重新加载完整数据
+      setTimeout(async () => {
+        await loadRepositoryData();
+      }, 1000);
+      
       showNotification(`服务 "${service.service_name}" 正在停止`, 'success');
     } catch (error) {
       console.error('Stop service failed:', error);
@@ -838,8 +897,20 @@
 
   async function handleRestartService(service) {
     try {
-      await api.repositories.restartService(service.id);
-      await loadRepositoryData(); // 重新加载数据
+      await api.restartService(service.id);
+      
+      // 立即更新本地状态以提供即时反馈
+      const serviceIndex = services.findIndex(s => s.id === service.id);
+      if (serviceIndex !== -1) {
+        services[serviceIndex] = { ...services[serviceIndex], status: 'starting' };
+        services = [...services]; // 触发响应式更新
+      }
+      
+      // 然后异步重新加载完整数据
+      setTimeout(async () => {
+        await loadRepositoryData();
+      }, 1000);
+      
       showNotification(`服务 "${service.service_name}" 正在重启`, 'success');
     } catch (error) {
       console.error('Restart service failed:', error);
@@ -853,20 +924,42 @@
     }
 
     try {
-      await api.repositories.deleteService(service.id);
-      await loadRepositoryData(); // 重新加载数据
+      await api.deleteService(service.id);
+      
+      // 立即从本地列表中移除该服务
+      services = services.filter(s => s.id !== service.id);
+      
+      // 然后异步重新加载完整数据（确保数据一致性）
+      setTimeout(async () => {
+        await loadRepositoryData();
+      }, 500);
+      
       showNotification(`服务 "${service.service_name}" 已删除`, 'success');
     } catch (error) {
       console.error('Delete service failed:', error);
       showNotification(`删除服务失败：${error.message}`, 'error');
+      // 删除失败时重新加载数据
+      await loadRepositoryData();
     }
   }
 
   // Service batch operations
   async function handleBatchStartServices(serviceIds) {
     try {
-      await api.repositories.batchStartServices(username, repoName, serviceIds);
-      await loadRepositoryData();
+      await api.batchStartServices(username, repoName, serviceIds);
+      
+      // 立即更新本地状态
+      services = services.map(service => 
+        serviceIds.includes(service.id) 
+          ? { ...service, status: 'starting' }
+          : service
+      );
+      
+      // 异步重新加载完整数据
+      setTimeout(async () => {
+        await loadRepositoryData();
+      }, 1000);
+      
       showNotification(`批量启动 ${serviceIds.length} 个服务`, 'success');
     } catch (error) {
       console.error('Batch start services failed:', error);
@@ -876,8 +969,20 @@
 
   async function handleBatchStopServices(serviceIds) {
     try {
-      await api.repositories.batchStopServices(username, repoName, serviceIds);
-      await loadRepositoryData();
+      await api.batchStopServices(username, repoName, serviceIds);
+      
+      // 立即更新本地状态
+      services = services.map(service => 
+        serviceIds.includes(service.id) 
+          ? { ...service, status: 'stopping' }
+          : service
+      );
+      
+      // 异步重新加载完整数据
+      setTimeout(async () => {
+        await loadRepositoryData();
+      }, 1000);
+      
       showNotification(`批量停止 ${serviceIds.length} 个服务`, 'success');
     } catch (error) {
       console.error('Batch stop services failed:', error);
@@ -891,12 +996,22 @@
     }
 
     try {
-      await api.repositories.batchDeleteServices(username, repoName, serviceIds);
-      await loadRepositoryData();
+      await api.batchDeleteServices(username, repoName, serviceIds);
+      
+      // 立即从本地列表中移除这些服务
+      services = services.filter(service => !serviceIds.includes(service.id));
+      
+      // 异步重新加载完整数据（确保数据一致性）
+      setTimeout(async () => {
+        await loadRepositoryData();
+      }, 500);
+      
       showNotification(`批量删除 ${serviceIds.length} 个服务`, 'success');
     } catch (error) {
       console.error('Batch delete services failed:', error);
       showNotification(`批量删除失败：${error.message}`, 'error');
+      // 删除失败时重新加载数据
+      await loadRepositoryData();
     }
   }
 
@@ -1758,6 +1873,7 @@
 <ServiceCreateModal
   isOpen={showCreateServiceModal}
   loading={serviceModalLoading}
+  availableImages={availableImages}
   on:create={handleCreateService}
   on:close={() => showCreateServiceModal = false}
 />
@@ -1901,6 +2017,8 @@
 {#if showServiceFromImageModal && selectedImage}
   <ServiceFromImageModal
     image={selectedImage}
+    owner={username}
+    repository={repoName}
     on:created={handleImageServiceCreated}
     on:close={() => showServiceFromImageModal = false}
   />

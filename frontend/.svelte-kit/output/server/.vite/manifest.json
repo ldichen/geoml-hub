@@ -8,8 +8,21 @@
     "src": ".svelte-kit/generated/server/internal.js"
   },
   "RepositoryCard.css": {
-    "file": "_app/immutable/assets/RepositoryCard.43cb8110.css",
+    "file": "_app/immutable/assets/RepositoryCard.a8c9f86c.css",
     "src": "RepositoryCard.css"
+  },
+  "_Button.js": {
+    "file": "chunks/Button.js",
+    "imports": [
+      "_ssr.js"
+    ]
+  },
+  "_Icon.js": {
+    "file": "chunks/Icon.js",
+    "imports": [
+      "_utils.js",
+      "_ssr.js"
+    ]
   },
   "_Loading.js": {
     "file": "chunks/Loading.js",
@@ -21,21 +34,15 @@
   },
   "_RepositoryCard.js": {
     "css": [
-      "_app/immutable/assets/RepositoryCard.43cb8110.css"
+      "_app/immutable/assets/RepositoryCard.a8c9f86c.css"
     ],
     "file": "chunks/RepositoryCard.js",
     "imports": [
       "_ssr.js",
-      "_star.js",
+      "_Icon.js",
       "_utils.js",
       "_runtime.esm.js",
-      "_api.js"
-    ]
-  },
-  "_api.js": {
-    "file": "chunks/api.js",
-    "imports": [
-      "_false.js"
+      "_star.js"
     ]
   },
   "_auth.js": {
@@ -58,7 +65,7 @@
     "file": "chunks/filter.js",
     "imports": [
       "_ssr.js",
-      "_star.js"
+      "_Icon.js"
     ]
   },
   "_index.js": {
@@ -99,7 +106,7 @@
     "file": "chunks/star.js",
     "imports": [
       "_ssr.js",
-      "_utils.js"
+      "_Icon.js"
     ]
   },
   "_stores.js": {
@@ -112,11 +119,18 @@
     "file": "chunks/trending-up.js",
     "imports": [
       "_ssr.js",
-      "_star.js"
+      "_Icon.js"
     ]
   },
   "_utils.js": {
     "file": "chunks/utils.js"
+  },
+  "_x.js": {
+    "file": "chunks/x.js",
+    "imports": [
+      "_ssr.js",
+      "_Icon.js"
+    ]
   },
   "node_modules/@sveltejs/kit/src/runtime/components/error.svelte": {
     "file": "entries/fallbacks/error.svelte.js",
@@ -149,7 +163,7 @@
     "src": "src/lib/i18n/locales/zh-CN.json"
   },
   "src/routes/+layout.css": {
-    "file": "_app/immutable/assets/_layout.5152c978.css",
+    "file": "_app/immutable/assets/_layout.01ddde08.css",
     "src": "src/routes/+layout.css"
   },
   "src/routes/+layout.js": {
@@ -162,7 +176,7 @@
   },
   "src/routes/+layout.svelte": {
     "css": [
-      "_app/immutable/assets/_layout.5152c978.css"
+      "_app/immutable/assets/_layout.01ddde08.css"
     ],
     "file": "entries/pages/_layout.svelte.js",
     "imports": [
@@ -170,62 +184,63 @@
       "_ssr.js",
       "_index2.js",
       "_runtime.esm.js",
-      "_auth.js",
-      "_api.js"
+      "_index.js",
+      "_auth.js"
     ],
     "isEntry": true,
     "src": "src/routes/+layout.svelte"
   },
   "src/routes/+page.css": {
-    "file": "_app/immutable/assets/_page.3777cc8c.css",
+    "file": "_app/immutable/assets/_page.6fa79f52.css",
     "src": "src/routes/+page.css"
   },
   "src/routes/+page.svelte": {
     "css": [
-      "_app/immutable/assets/_page.3777cc8c.css"
+      "_app/immutable/assets/_page.6fa79f52.css"
     ],
     "file": "entries/pages/_page.svelte.js",
     "imports": [
-      "_ssr.js",
-      "_api.js",
-      "_RepositoryCard.js",
       "_utils.js",
+      "_ssr.js",
+      "_RepositoryCard.js",
       "_runtime.esm.js",
-      "_star.js",
+      "_x.js",
       "_Loading.js",
-      "_trending-up.js"
+      "_auth.js",
+      "_trending-up.js",
+      "_star.js"
     ],
     "isEntry": true,
     "src": "src/routes/+page.svelte"
   },
   "src/routes/[username]/+page.css": {
-    "file": "_app/immutable/assets/_page.668cffbd.css",
+    "file": "_app/immutable/assets/_page.6f66687d.css",
     "src": "src/routes/[username]/+page.css"
   },
   "src/routes/[username]/+page.svelte": {
     "css": [
-      "_app/immutable/assets/_page.668cffbd.css",
-      "_app/immutable/assets/RepositoryCard.43cb8110.css"
+      "_app/immutable/assets/_page.6f66687d.css",
+      "_app/immutable/assets/RepositoryCard.a8c9f86c.css"
     ],
     "file": "entries/pages/_username_/_page.svelte.js",
     "imports": [
       "_utils.js",
       "_ssr.js",
       "_stores.js",
-      "_api.js",
       "_runtime.esm.js",
-      "_Loading.js"
+      "_Loading.js",
+      "_auth.js"
     ],
     "isEntry": true,
     "src": "src/routes/[username]/+page.svelte"
   },
   "src/routes/[username]/[repository]/+page.css": {
-    "file": "_app/immutable/assets/_page.d88e5f79.css",
+    "file": "_app/immutable/assets/_page.4719aadc.css",
     "src": "src/routes/[username]/[repository]/+page.css"
   },
   "src/routes/[username]/[repository]/+page.svelte": {
     "css": [
-      "_app/immutable/assets/_page.d88e5f79.css"
+      "_app/immutable/assets/_page.4719aadc.css"
     ],
     "file": "entries/pages/_username_/_repository_/_page.svelte.js",
     "imports": [
@@ -233,13 +248,94 @@
       "_ssr.js",
       "_stores.js",
       "_runtime.esm.js",
-      "_api.js",
       "_auth.js",
       "_auth2.js",
-      "_Loading.js"
+      "_Loading.js",
+      "_Icon.js",
+      "_x.js"
     ],
     "isEntry": true,
     "src": "src/routes/[username]/[repository]/+page.svelte"
+  },
+  "src/routes/[username]/[repository]/blob/[...file_path]/+page.css": {
+    "file": "_app/immutable/assets/_page.914786c7.css",
+    "src": "src/routes/[username]/[repository]/blob/[...file_path]/+page.css"
+  },
+  "src/routes/[username]/[repository]/blob/[...file_path]/+page.svelte": {
+    "css": [
+      "_app/immutable/assets/_page.914786c7.css"
+    ],
+    "file": "entries/pages/_username_/_repository_/blob/_...file_path_/_page.svelte.js",
+    "imports": [
+      "_utils.js",
+      "_ssr.js",
+      "_stores.js",
+      "_auth.js",
+      "_runtime.esm.js",
+      "_Loading.js"
+    ],
+    "isEntry": true,
+    "src": "src/routes/[username]/[repository]/blob/[...file_path]/+page.svelte"
+  },
+  "src/routes/[username]/[repository]/commits/[...file_path]/+page.css": {
+    "file": "_app/immutable/assets/_page.7e846fb9.css",
+    "src": "src/routes/[username]/[repository]/commits/[...file_path]/+page.css"
+  },
+  "src/routes/[username]/[repository]/commits/[...file_path]/+page.svelte": {
+    "css": [
+      "_app/immutable/assets/_page.7e846fb9.css"
+    ],
+    "file": "entries/pages/_username_/_repository_/commits/_...file_path_/_page.svelte.js",
+    "imports": [
+      "_utils.js",
+      "_ssr.js",
+      "_stores.js",
+      "_runtime.esm.js",
+      "_Loading.js"
+    ],
+    "isEntry": true,
+    "src": "src/routes/[username]/[repository]/commits/[...file_path]/+page.svelte"
+  },
+  "src/routes/[username]/[repository]/drafts/+page.css": {
+    "file": "_app/immutable/assets/_page.786f409d.css",
+    "src": "src/routes/[username]/[repository]/drafts/+page.css"
+  },
+  "src/routes/[username]/[repository]/drafts/+page.svelte": {
+    "css": [
+      "_app/immutable/assets/_page.786f409d.css"
+    ],
+    "file": "entries/pages/_username_/_repository_/drafts/_page.svelte.js",
+    "imports": [
+      "_utils.js",
+      "_ssr.js",
+      "_stores.js",
+      "_runtime.esm.js",
+      "_Button.js",
+      "_Loading.js"
+    ],
+    "isEntry": true,
+    "src": "src/routes/[username]/[repository]/drafts/+page.svelte"
+  },
+  "src/routes/[username]/[repository]/edit/[...file_path]/+page.css": {
+    "file": "_app/immutable/assets/_page.9e6dfa5b.css",
+    "src": "src/routes/[username]/[repository]/edit/[...file_path]/+page.css"
+  },
+  "src/routes/[username]/[repository]/edit/[...file_path]/+page.svelte": {
+    "css": [
+      "_app/immutable/assets/_page.9e6dfa5b.css"
+    ],
+    "file": "entries/pages/_username_/_repository_/edit/_...file_path_/_page.svelte.js",
+    "imports": [
+      "_utils.js",
+      "_ssr.js",
+      "_stores.js",
+      "_auth.js",
+      "_runtime.esm.js",
+      "_Button.js",
+      "_Loading.js"
+    ],
+    "isEntry": true,
+    "src": "src/routes/[username]/[repository]/edit/[...file_path]/+page.svelte"
   },
   "src/routes/[username]/[repository]/upload/+page.css": {
     "file": "_app/immutable/assets/_page.2c95802d.css",
@@ -257,11 +353,76 @@
       "_runtime.esm.js",
       "_auth.js",
       "_auth2.js",
-      "_api.js",
       "_Loading.js"
     ],
     "isEntry": true,
     "src": "src/routes/[username]/[repository]/upload/+page.svelte"
+  },
+  "src/routes/admin/+layout.svelte": {
+    "file": "entries/pages/admin/_layout.svelte.js",
+    "imports": [
+      "_utils.js",
+      "_ssr.js",
+      "_stores.js"
+    ],
+    "isEntry": true,
+    "src": "src/routes/admin/+layout.svelte"
+  },
+  "src/routes/admin/+page.svelte": {
+    "file": "entries/pages/admin/_page.svelte.js",
+    "imports": [
+      "_ssr.js"
+    ],
+    "isEntry": true,
+    "src": "src/routes/admin/+page.svelte"
+  },
+  "src/routes/admin/dashboard/+page.svelte": {
+    "file": "entries/pages/admin/dashboard/_page.svelte.js",
+    "imports": [
+      "_ssr.js"
+    ],
+    "isEntry": true,
+    "src": "src/routes/admin/dashboard/+page.svelte"
+  },
+  "src/routes/admin/repositories/+page.svelte": {
+    "file": "entries/pages/admin/repositories/_page.svelte.js",
+    "imports": [
+      "_ssr.js"
+    ],
+    "isEntry": true,
+    "src": "src/routes/admin/repositories/+page.svelte"
+  },
+  "src/routes/admin/settings/+page.svelte": {
+    "file": "entries/pages/admin/settings/_page.svelte.js",
+    "imports": [
+      "_ssr.js"
+    ],
+    "isEntry": true,
+    "src": "src/routes/admin/settings/+page.svelte"
+  },
+  "src/routes/admin/storage/+page.svelte": {
+    "file": "entries/pages/admin/storage/_page.svelte.js",
+    "imports": [
+      "_ssr.js"
+    ],
+    "isEntry": true,
+    "src": "src/routes/admin/storage/+page.svelte"
+  },
+  "src/routes/admin/system/+page.svelte": {
+    "file": "entries/pages/admin/system/_page.svelte.js",
+    "imports": [
+      "_ssr.js"
+    ],
+    "isEntry": true,
+    "src": "src/routes/admin/system/+page.svelte"
+  },
+  "src/routes/admin/users/+page.svelte": {
+    "file": "entries/pages/admin/users/_page.svelte.js",
+    "imports": [
+      "_ssr.js"
+    ],
+    "isEntry": true,
+    "src": "src/routes/admin/users/+page.svelte"
   },
   "src/routes/login/+page.css": {
     "file": "_app/immutable/assets/_page.d6a1033e.css",
@@ -275,19 +436,24 @@
     "imports": [
       "_utils.js",
       "_ssr.js",
-      "_api.js",
       "_runtime.esm.js"
     ],
     "isEntry": true,
     "src": "src/routes/login/+page.svelte"
   },
+  "src/routes/new/+page.css": {
+    "file": "_app/immutable/assets/_page.5b3cd4da.css",
+    "src": "src/routes/new/+page.css"
+  },
   "src/routes/new/+page.svelte": {
+    "css": [
+      "_app/immutable/assets/_page.5b3cd4da.css"
+    ],
     "file": "entries/pages/new/_page.svelte.js",
     "imports": [
       "_utils.js",
       "_ssr.js",
       "_runtime.esm.js",
-      "_api.js",
       "_auth.js"
     ],
     "isEntry": true,
@@ -298,7 +464,6 @@
     "imports": [
       "_utils.js",
       "_ssr.js",
-      "_api.js",
       "_runtime.esm.js"
     ],
     "isEntry": true,
@@ -311,10 +476,11 @@
       "_ssr.js",
       "_stores.js",
       "_runtime.esm.js",
-      "_api.js",
+      "_false.js",
+      "_auth.js",
       "_RepositoryCard.js",
       "_Loading.js",
-      "_star.js",
+      "_Icon.js",
       "_filter.js"
     ],
     "isEntry": true,
@@ -322,14 +488,13 @@
   },
   "src/routes/trending/+page.svelte": {
     "css": [
-      "_app/immutable/assets/RepositoryCard.43cb8110.css"
+      "_app/immutable/assets/RepositoryCard.a8c9f86c.css"
     ],
     "file": "entries/pages/trending/_page.svelte.js",
     "imports": [
       "_utils.js",
       "_ssr.js",
       "_runtime.esm.js",
-      "_api.js",
       "_Loading.js",
       "_trending-up.js",
       "_filter.js",

@@ -2,7 +2,7 @@
  * @Author: DiChen
  * @Date: 2025-07-26 15:58:59
  * @LastEditors: DiChen
- * @LastEditTime: 2025-07-31 14:06:11
+ * @LastEditTime: 2025-08-04 15:11:00
  */
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig, loadEnv } from 'vite';
@@ -17,7 +17,7 @@ export default defineConfig(({ mode }) => {
 			port: 5173,
 			proxy: {
 				'/api': {
-					target: 'http://10.30.7.250:8000', // 代理指向局域网后端
+					target: 'http://localhost:8000', // 代理指向本地后端
 					changeOrigin: true,
 					secure: false
 				}

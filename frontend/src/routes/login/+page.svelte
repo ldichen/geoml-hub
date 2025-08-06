@@ -3,7 +3,7 @@
     import { goto } from '$app/navigation';
     import { login as authLogin, isLoading } from '$lib/stores/auth.js';
     import { redirectIfAuthenticated } from '$lib/utils/auth.js';
-    import { authApi } from '$lib/utils/api.js';
+    import { api } from '$lib/utils/api.js';
     import { _ } from 'svelte-i18n';
     
     let email = '';
@@ -27,7 +27,7 @@
         
         try {
             // 使用OpenGMS用户服务器登录
-            const response = await authApi.loginWithCredentials(email, password);
+            const response = await api.loginWithCredentials(email, password);
             
             if (response.success) {
                 // 登录成功，保存token和用户信息

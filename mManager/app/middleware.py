@@ -4,13 +4,16 @@ mManager 中间件
 
 import time
 import logging
-from fastapi import Request, HTTPException
+from fastapi import Request, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+# HTTPBearer安全方案实例
+security = HTTPBearer()
 
 class AuthenticationMiddleware(BaseHTTPMiddleware):
     """API密钥认证中间件"""
@@ -20,8 +23,8 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
         self.security = HTTPBearer()
     
     async def dispatch(self, request: Request, call_next):
-        # 跳过健康检查和文档接口的认证
-        if request.url.path in ["/health", "/docs", "/redoc", "/openapi.json"]:
+        # 跳过健康检查、文档接口和根路径的认证
+        if request.url.path in ["/", "/health", "/docs", "/redoc", "/openapi.json"]:
             return await call_next(request)
         
         # 检查Authorization头
@@ -63,3 +66,18 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         response.headers["X-Server-ID"] = settings.server_id
         
         return response
+
+
+def verify_api_key(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
+    """
+    验证API密钥的依赖函数
+    用于路由级别的认证检查
+    """
+    if credentials.credentials != settings.api_key:
+        logger.warning(f"Invalid API key attempt: {credentials.credentials[:10]}...")
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid API key",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return credentials.credentials

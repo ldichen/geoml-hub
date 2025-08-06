@@ -4,7 +4,6 @@ import { p as page } from "../../../../../chunks/stores.js";
 import { $ as $format } from "../../../../../chunks/runtime.esm.js";
 import { u as user } from "../../../../../chunks/auth.js";
 import { i as isOwner } from "../../../../../chunks/auth2.js";
-import "../../../../../chunks/api.js";
 import { L as Loading } from "../../../../../chunks/Loading.js";
 const FileUpload_svelte_svelte_type_style_lang = "";
 const Page = create_ssr_component(($$result, $$props, $$bindings, slots) => {

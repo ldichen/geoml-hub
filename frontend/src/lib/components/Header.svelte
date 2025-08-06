@@ -53,7 +53,7 @@
   
   async function handleLogout() {
     try {
-      await api.auth.logout();
+      await api.logout();
       logout();
       showUserDropdown = false;
       window.location.href = '/';

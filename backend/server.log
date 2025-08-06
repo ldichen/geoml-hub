@@ -1,2 +1,32 @@
 INFO:     Will watch for changes in these directories: ['/Users/liudichen/Documents/project/GeoML-hub/backend']
-ERROR:    [Errno 48] Address already in use
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [49255] using StatReload
+INFO:     Started server process [49266]
+INFO:     Waiting for application startup.
+2025-08-04 15:43:39,721 - app.main - INFO - 初始化 GeoML-Hub v2.0 服务...
+2025-08-04 15:43:39,721 - app.main - INFO - 初始化 GeoML-Hub v2.0 服务...
+2025-08-04 15:43:39,721 - app.services.mmanager_client - INFO - 注册mManager控制器: mmanager-local-01 -> http://localhost:8001
+2025-08-04 15:43:39,721 - app.services.mmanager_client - INFO - 注册mManager控制器: mmanager-local-01 -> http://localhost:8001
+2025-08-04 15:43:40,301 - app.services.mmanager_client - INFO - 控制器同步完成，活跃控制器: 1, 清理废弃控制器: 0
+2025-08-04 15:43:40,301 - app.services.mmanager_client - INFO - 控制器同步完成，活跃控制器: 1, 清理废弃控制器: 0
+2025-08-04 15:43:40,302 - app.services.mmanager_client - INFO - mManager控制器管理器初始化完成，已注册 1 个控制器
+2025-08-04 15:43:40,302 - app.services.mmanager_client - INFO - mManager控制器管理器初始化完成，已注册 1 个控制器
+2025-08-04 15:43:40,302 - app.services.model_service - INFO - 模型服务管理器初始化完成
+2025-08-04 15:43:40,302 - app.services.model_service - INFO - 模型服务管理器初始化完成
+2025-08-04 15:43:40,302 - app.main - INFO - 服务管理器初始化成功
+2025-08-04 15:43:40,302 - app.main - INFO - 服务管理器初始化成功
+INFO:     Application startup complete.
+2025-08-04 15:43:43,777 - app.routers.services - INFO - 获取仓库 4 服务列表，auto_start=False
+2025-08-04 15:43:43,777 - app.routers.services - INFO - 获取仓库 4 服务列表，auto_start=False
+2025-08-04 15:43:43,777 - app.routers.services - INFO - 当前为游客用户
+2025-08-04 15:43:43,777 - app.routers.services - INFO - 当前为游客用户
+INFO:     127.0.0.1:52746 - "GET /api/opengms/Prithvi-EO-1.0-100M-sen1floods11/services HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53457 - "GET /api/repositories/opengms/Prithvi-EO-1.0-100M-sen1floods11 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53459 - "GET /api/repositories/opengms/Prithvi-EO-1.0-100M-sen1floods11/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53547 - "POST /api/repositories/opengms/Prithvi-EO-1.0-100M-sen1floods11/view HTTP/1.1" 200 OK
+2025-08-04 15:45:12,835 - app.routers.services - INFO - 获取仓库 4 服务列表，auto_start=False
+2025-08-04 15:45:12,835 - app.routers.services - INFO - 获取仓库 4 服务列表，auto_start=False
+2025-08-04 15:45:12,835 - app.routers.services - INFO - 当前为游客用户
+2025-08-04 15:45:12,835 - app.routers.services - INFO - 当前为游客用户
+INFO:     127.0.0.1:53555 - "GET /api/opengms/Prithvi-EO-1.0-100M-sen1floods11/services HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53561 - "GET /api/repositories/opengms/Prithvi-EO-1.0-100M-sen1floods11/raw/sen1floods11-finetuning.png HTTP/1.1" 200 OK

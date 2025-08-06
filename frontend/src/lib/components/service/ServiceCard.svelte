@@ -1,6 +1,6 @@
 <script>
   import { createEventDispatcher } from 'svelte';
-  import { Play, Square, RotateCcw, ExternalLink, Activity, Settings, Trash2, Eye, Clock, Cpu, HardDrive } from 'lucide-svelte';
+  import { Play, Square, RotateCcw, ExternalLink, Activity, Settings, Trash2, Eye, Clock, Cpu, HardDrive, Wifi } from 'lucide-svelte';
   import { formatDistanceToNow } from 'date-fns';
   import { zhCN } from 'date-fns/locale';
 
@@ -202,35 +202,6 @@
       </div>
     </div>
     
-    {#if service.gradio_port || service.model_ip}
-      <div class="grid grid-cols-2 gap-4 pt-3 border-t border-gray-200 dark:border-gray-600">
-        {#if service.gradio_port}
-          <div class="flex items-center justify-between">
-            <div class="flex items-center space-x-2">
-              <Wifi class="w-4 h-4 text-purple-500" />
-              <span class="text-sm text-gray-600 dark:text-gray-300">端口</span>
-            </div>
-            <span class="text-sm font-medium text-gray-900 dark:text-white">
-              {service.gradio_port}
-            </span>
-          </div>
-        {/if}
-        
-        {#if service.model_ip}
-          <div class="flex items-center justify-between">
-            <div class="flex items-center space-x-2">
-              <svg class="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9v-9m0-9v9"></path>
-              </svg>
-              <span class="text-sm text-gray-600 dark:text-gray-300">IP</span>
-            </div>
-            <span class="text-sm font-medium text-gray-900 dark:text-white">
-              {service.model_ip}
-            </span>
-          </div>
-        {/if}
-      </div>
-    {/if}
     
     <!-- Priority indicator -->
     {#if service.priority !== undefined}

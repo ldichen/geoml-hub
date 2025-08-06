@@ -1,6 +1,6 @@
 const app = {
   name: "GeoML-Hub",
-  description: "首个地理领域机器学习模型库",
+  description: "地理领域机器学习模型库",
   version: "版本 {version}"
 };
 const navigation = {
@@ -430,6 +430,9 @@ const pagination = {
   items: "共 {total} 项",
   showing: "显示 {from} - {to} 项，共 {total} 项"
 };
+const openGMS = {
+  openGMS: "开放式地理建模与模拟"
+};
 const zhCN = {
   app,
   navigation,
@@ -450,7 +453,8 @@ const zhCN = {
   theme,
   language,
   error,
-  pagination
+  pagination,
+  openGMS
 };
 export {
   activity,
@@ -467,6 +471,7 @@ export {
   model,
   navigation,
   notification,
+  openGMS,
   pagination,
   repository,
   search,

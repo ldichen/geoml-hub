@@ -78,7 +78,16 @@ class ResourceManager:
         if not available_ports:
             raise RuntimeError(f"端口范围 {self.port_range_start}-{self.port_range_end} 内没有可用端口")
         
-        # 返回最小可用端口
+        # 如果系统端口检查失败（权限不足），使用端口绑定测试验证可用性
+        if not system_used_ports:  # 如果系统端口列表为空，说明获取失败
+            logger.info("使用端口绑定测试验证端口可用性")
+            for port in sorted(available_ports):
+                if self._is_port_available(port):
+                    logger.info(f"分配端口: {port} (通过绑定测试验证)")
+                    return port
+            raise RuntimeError(f"端口范围内所有候选端口都不可用")
+        
+        # 正常情况：返回最小可用端口
         allocated_port = min(available_ports)
         logger.info(f"分配端口: {allocated_port}")
         return allocated_port
@@ -88,14 +97,39 @@ class ResourceManager:
         used_ports = set()
         
         try:
+            # 尝试获取系统端口使用情况
             connections = psutil.net_connections(kind='inet')
             for conn in connections:
                 if conn.laddr and self.port_range_start <= conn.laddr.port <= self.port_range_end:
                     used_ports.add(conn.laddr.port)
-        except (psutil.AccessDenied, psutil.NoSuchProcess):
-            logger.warning("无法获取系统端口使用情况，可能需要管理员权限")
+            logger.debug(f"从系统获取到 {len(used_ports)} 个已使用的端口")
+        except (psutil.AccessDenied, psutil.NoSuchProcess, PermissionError):
+            logger.info("无法获取系统端口使用情况，将使用端口绑定测试作为替代方案")
+            # 如果无法获取系统端口信息，返回空集合，后续会通过尝试绑定的方式检查端口
+        except Exception as e:
+            logger.warning(f"获取端口使用情况时出现异常: {e}")
         
         return used_ports
+    
+    def _is_port_available(self, port: int) -> bool:
+        """通过尝试绑定来检查端口是否可用"""
+        import socket
+        import time
+        
+        try:
+            # 尝试绑定TCP端口
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                # 设置非阻塞模式，快速检测
+                sock.settimeout(0.1)
+                sock.bind(('127.0.0.1', port))
+                # 立即关闭socket，释放端口
+                sock.close()
+                # 短暂等待确保端口完全释放
+                time.sleep(0.01)
+                return True
+        except (socket.error, OSError):
+            return False
     
     def validate_resource_limits(self, cpu_limit: str, memory_limit: str) -> ResourceLimits:
         """验证资源限制"""

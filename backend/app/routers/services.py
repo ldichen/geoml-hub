@@ -11,7 +11,18 @@
 import logging
 import time
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, UploadFile, File, Form
+from datetime import datetime, timedelta, timezone
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Query,
+    BackgroundTasks,
+    UploadFile,
+    File,
+    Form,
+    Path,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func
 from sqlalchemy.orm import selectinload
@@ -38,9 +49,58 @@ from app.schemas.service import (
 )
 from app.services.container_service import container_file_service
 from app.services.model_service import service_manager
+from app.config import settings
+from app.utils.service_helpers import (
+    ServicePermissionManager,
+    ServiceValidator,
+    ServiceCreationManager,
+    BatchOperationManager,
+)
+from app.utils.logger import logger
 
-router = APIRouter(prefix="/api", tags=["services"])
-logger = logging.getLogger(__name__)
+router = APIRouter()
+
+
+async def cleanup_failed_and_stale_images(db: AsyncSession, repository_id: int):
+    """清理失败和超时的镜像记录"""
+    from app.models.image import Image
+
+    # 删除所有失败的镜像
+    failed_images_query = select(Image).where(
+        and_(Image.repository_id == repository_id, Image.status == "failed")
+    )
+    result = await db.execute(failed_images_query)
+    failed_images = result.scalars().all()
+
+    for image in failed_images:
+        logger.info(
+            f"清理失败镜像: {image.original_name}:{image.original_tag} (id={image.id})"
+        )
+        await db.delete(image)
+
+    # 删除创建超过3天但仍处于未完成状态的镜像
+    three_days_ago = datetime.now(timezone.utc) - timedelta(days=3)
+    stale_images_query = select(Image).where(
+        and_(
+            Image.repository_id == repository_id,
+            Image.status.in_(["uploading", "processing"]),
+            Image.created_at < three_days_ago,
+        )
+    )
+    result = await db.execute(stale_images_query)
+    stale_images = result.scalars().all()
+
+    for image in stale_images:
+        logger.info(
+            f"清理超时镜像: {image.original_name}:{image.original_tag} (id={image.id}, 创建时间={image.created_at})"
+        )
+        await db.delete(image)
+
+    if failed_images or stale_images:
+        await db.commit()
+        logger.info(
+            f"清理完成: 删除了{len(failed_images)}个失败镜像，{len(stale_images)}个超时镜像"
+        )
 
 
 # 依赖函数
@@ -70,15 +130,15 @@ async def get_repository_with_permission(
     if repository.visibility == "public":
         # 公开仓库，任何人都可以访问（包括未登录用户）
         return repository
-    
+
     # 私有仓库需要认证且为仓库所有者
     if not current_user:
         raise HTTPException(
-            status_code=401, 
+            status_code=401,
             detail="访问私有仓库需要登录",
-            headers={"WWW-Authenticate": "Bearer"}
+            headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     if repository.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="无权限访问此私有仓库")
 
@@ -108,15 +168,15 @@ async def get_service_with_permission(
     if service.is_public:
         # 公开服务，任何人都可以访问（包括未登录用户）
         return service
-    
+
     # 私有服务需要认证且为服务所有者
     if not current_user:
         raise HTTPException(
-            status_code=401, 
+            status_code=401,
             detail="访问私有服务需要登录",
-            headers={"WWW-Authenticate": "Bearer"}
+            headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     if service.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="无权限访问此私有服务")
 
@@ -124,7 +184,7 @@ async def get_service_with_permission(
 
 
 # 服务管理API
-@router.get("/{username}/{repo_name}/services", response_model=ServiceListResponse)
+@router.get("/{username}/{repo_name}", response_model=ServiceListResponse)
 async def list_repository_services(
     repository: Repository = Depends(get_repository_with_permission),
     page: int = Query(1, ge=1, description="页码"),
@@ -135,7 +195,7 @@ async def list_repository_services(
     db: AsyncSession = Depends(get_async_db),
 ):
     """获取仓库服务列表，支持自动启动"""
-    
+
     try:
         logger.info(f"获取仓库 {repository.id} 服务列表，auto_start={auto_start}")
         if current_user:
@@ -145,7 +205,7 @@ async def list_repository_services(
 
         # 构建查询 - 对于游客，只显示公开服务
         query = select(ModelService).where(ModelService.repository_id == repository.id)
-        
+
         # 如果是游客用户，只能看到公开服务
         if not current_user:
             query = query.where(ModelService.is_public == True)
@@ -174,13 +234,13 @@ async def list_repository_services(
         total_query = select(func.count(ModelService.id)).where(
             ModelService.repository_id == repository.id
         )
-        
+
         # 应用相同的权限过滤
         if not current_user:
             total_query = total_query.where(ModelService.is_public == True)
         elif current_user.id != repository.owner_id:
             total_query = total_query.where(ModelService.is_public == True)
-            
+
         if status:
             total_query = total_query.where(ModelService.status == status)
 
@@ -215,42 +275,35 @@ async def list_repository_services(
         raise HTTPException(status_code=500, detail=f"获取服务列表失败: {str(e)}")
 
 
-@router.post(
-    "/{username}/{repo_name}/services", response_model=ServiceResponse, status_code=201
-)
-async def create_service(
+@router.post("/{username}/{repo_name}", response_model=ServiceResponse, status_code=201)
+async def create_service_with_image(
     service_data: ServiceCreate,
     repository: Repository = Depends(get_repository_with_permission),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db),
 ):
-    """创建模型服务"""
-
-    # 检查创建权限（仓库所有者）
-    if repository.owner_id != current_user.id:
-        raise HTTPException(status_code=403, detail="只有仓库所有者可以创建服务")
+    """基于已有镜像创建模型服务"""
 
     try:
-        service = await service_manager.create_service(
-            db=db,
-            service_data=service_data,
-            repository_id=repository.id,
-            user_id=current_user.id,
+        service, _ = await ServiceCreationManager.create_service_from_image(
+            db, service_data, repository, current_user, service_manager
         )
         return service
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"创建服务失败: {str(e)}")
 
 
-@router.get("/services/{service_id}", response_model=ServiceResponse)
+@router.get("/{service_id}", response_model=ServiceResponse)
 async def get_service(service: ModelService = Depends(get_service_with_permission)):
     """获取服务详情"""
     return ServiceResponse.model_validate(service)
 
 
-@router.put("/services/{service_id}", response_model=ServiceResponse)
+@router.put("/{service_id}", response_model=ServiceResponse)
 async def update_service(
     service_data: ServiceUpdate,
     service: ModelService = Depends(get_service_with_permission),
@@ -260,12 +313,13 @@ async def update_service(
     """更新服务配置"""
 
     # 检查修改权限（服务所有者）
-    if service.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="只有服务所有者可以修改配置")
+    ServicePermissionManager.check_service_owner_permission(
+        service, current_user, "修改配置"
+    )
 
     try:
         # 更新服务字段
-        update_data = service_data.dict(exclude_unset=True)
+        update_data = service_data.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(service, field, value)
 
@@ -278,7 +332,7 @@ async def update_service(
         raise HTTPException(status_code=500, detail=f"更新服务失败: {str(e)}")
 
 
-@router.delete("/services/{service_id}", status_code=204)
+@router.delete("/{service_id}", status_code=204)
 async def delete_service(
     service: ModelService = Depends(get_service_with_permission),
     current_user: User = Depends(get_current_user),
@@ -287,8 +341,9 @@ async def delete_service(
     """删除服务"""
 
     # 检查删除权限（服务所有者）
-    if service.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="只有服务所有者可以删除服务")
+    ServicePermissionManager.check_service_owner_permission(
+        service, current_user, "删除服务"
+    )
 
     try:
         await service_manager.delete_service(
@@ -299,7 +354,7 @@ async def delete_service(
 
 
 # 服务生命周期控制API
-@router.post("/services/{service_id}/start", response_model=ServiceResponse)
+@router.post("/{service_id}/start", response_model=ServiceResponse)
 async def start_service(
     start_request: ServiceStartRequest,
     service: ModelService = Depends(get_service_with_permission),
@@ -309,8 +364,9 @@ async def start_service(
     """启动服务"""
 
     # 检查操作权限（服务所有者）
-    if service.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="只有服务所有者可以启动服务")
+    ServicePermissionManager.check_service_owner_permission(
+        service, current_user, "启动服务"
+    )
 
     try:
         updated_service = await service_manager.start_service(
@@ -328,7 +384,7 @@ async def start_service(
         raise HTTPException(status_code=500, detail=f"启动服务失败: {str(e)}")
 
 
-@router.post("/services/{service_id}/stop", response_model=ServiceResponse)
+@router.post("/{service_id}/stop", response_model=ServiceResponse)
 async def stop_service(
     stop_request: ServiceStopRequest,
     service: ModelService = Depends(get_service_with_permission),
@@ -338,8 +394,9 @@ async def stop_service(
     """停止服务"""
 
     # 检查操作权限（服务所有者）
-    if service.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="只有服务所有者可以停止服务")
+    ServicePermissionManager.check_service_owner_permission(
+        service, current_user, "停止服务"
+    )
 
     try:
         updated_service = await service_manager.stop_service(
@@ -354,7 +411,7 @@ async def stop_service(
         raise HTTPException(status_code=500, detail=f"停止服务失败: {str(e)}")
 
 
-@router.post("/services/{service_id}/restart", response_model=ServiceResponse)
+@router.post("/{service_id}/restart", response_model=ServiceResponse)
 async def restart_service(
     service: ModelService = Depends(get_service_with_permission),
     current_user: User = Depends(get_current_user),
@@ -363,8 +420,9 @@ async def restart_service(
     """重启服务"""
 
     # 检查操作权限（服务所有者）
-    if service.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="只有服务所有者可以重启服务")
+    ServicePermissionManager.check_service_owner_permission(
+        service, current_user, "重启服务"
+    )
 
     try:
         # 先停止再启动
@@ -380,7 +438,7 @@ async def restart_service(
         raise HTTPException(status_code=500, detail=f"重启服务失败: {str(e)}")
 
 
-@router.get("/services/{service_id}/status", response_model=ServiceStatusResponse)
+@router.get("/{service_id}/status", response_model=ServiceStatusResponse)
 async def get_service_status(
     service: ModelService = Depends(get_service_with_permission),
     current_user: Optional[User] = Depends(get_current_user),
@@ -397,7 +455,7 @@ async def get_service_status(
         raise HTTPException(status_code=500, detail=f"获取服务状态失败: {str(e)}")
 
 
-@router.get("/services/{service_id}/logs", response_model=ServiceLogListResponse)
+@router.get("/{service_id}/logs", response_model=ServiceLogListResponse)
 async def get_service_logs(
     service: ModelService = Depends(get_service_with_permission),
     page: int = Query(1, ge=1, description="页码"),
@@ -441,7 +499,7 @@ async def get_service_logs(
 
 
 # 服务访问管理API
-@router.get("/services/{service_id}/demo")
+@router.get("/{service_id}/demo")
 async def access_service_demo(
     service: ModelService = Depends(get_service_with_permission),
     current_user: Optional[User] = Depends(get_current_user),
@@ -483,9 +541,7 @@ async def access_service_demo(
     return RedirectResponse(url=service.service_url)
 
 
-@router.post(
-    "/services/{service_id}/access-token", response_model=ServiceAccessResponse
-)
+@router.post("/{service_id}/access-token", response_model=ServiceAccessResponse)
 async def regenerate_access_token(
     access_request: ServiceAccessRequest,
     service: ModelService = Depends(get_service_with_permission),
@@ -495,10 +551,9 @@ async def regenerate_access_token(
     """重新生成访问令牌"""
 
     # 检查权限（服务所有者）
-    if service.user_id != current_user.id:
-        raise HTTPException(
-            status_code=403, detail="只有服务所有者可以重新生成访问令牌"
-        )
+    ServicePermissionManager.check_service_owner_permission(
+        service, current_user, "重新生成访问令牌"
+    )
 
     if access_request.regenerate_token:
         service.access_token = service_manager._generate_access_token()
@@ -512,7 +567,7 @@ async def regenerate_access_token(
     )
 
 
-@router.put("/services/{service_id}/visibility", response_model=ServiceResponse)
+@router.put("/{service_id}/visibility", response_model=ServiceResponse)
 async def update_service_visibility(
     visibility_data: dict,
     service: ModelService = Depends(get_service_with_permission),
@@ -522,8 +577,9 @@ async def update_service_visibility(
     """更新服务可见性"""
 
     # 检查权限（服务所有者）
-    if service.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="只有服务所有者可以修改可见性")
+    ServicePermissionManager.check_service_owner_permission(
+        service, current_user, "修改可见性"
+    )
 
     is_public = visibility_data.get("is_public")
     if is_public is not None:
@@ -535,9 +591,7 @@ async def update_service_visibility(
 
 
 # 服务监控API
-@router.get(
-    "/services/{service_id}/health", response_model=ServiceHealthCheckListResponse
-)
+@router.get("/{service_id}/health", response_model=ServiceHealthCheckListResponse)
 async def get_service_health_history(
     service: ModelService = Depends(get_service_with_permission),
     page: int = Query(1, ge=1, description="页码"),
@@ -570,7 +624,7 @@ async def get_service_health_history(
     )
 
 
-@router.post("/services/{service_id}/health-check")
+@router.post("/{service_id}/health-check")
 async def trigger_health_check(
     service: ModelService = Depends(get_service_with_permission),
     db: AsyncSession = Depends(get_async_db),
@@ -586,7 +640,7 @@ async def trigger_health_check(
         raise HTTPException(status_code=500, detail=f"健康检查失败: {str(e)}")
 
 
-@router.get("/services/{service_id}/metrics")
+@router.get("/{service_id}/metrics")
 async def get_service_metrics(
     service: ModelService = Depends(get_service_with_permission),
     current_user: Optional[User] = Depends(get_current_user),
@@ -630,7 +684,7 @@ async def get_service_metrics(
     return metrics
 
 
-@router.get("/services/{service_id}/resource-usage")
+@router.get("/{service_id}/resource-usage")
 async def get_service_resource_usage(
     service: ModelService = Depends(get_service_with_permission),
     db: AsyncSession = Depends(get_async_db),
@@ -650,9 +704,7 @@ async def get_service_resource_usage(
 
 
 # 批量操作API
-@router.post(
-    "/{username}/{repo_name}/services/batch/start", response_model=BatchServiceResponse
-)
+@router.post("/{username}/{repo_name}/batch/start", response_model=BatchServiceResponse)
 async def batch_start_services(
     batch_request: BatchServiceRequest,
     repository: Repository = Depends(get_repository_with_permission),
@@ -662,49 +714,20 @@ async def batch_start_services(
 ):
     """批量启动服务"""
 
-    # 检查权限（仓库所有者）
-    if repository.owner_id != current_user.id:
-        raise HTTPException(status_code=403, detail="只有仓库所有者可以批量操作服务")
-
-    successful = []
-    failed = []
-
-    for service_id in batch_request.service_ids:
-        try:
-            # 验证服务属于该仓库
-            service_query = select(ModelService).where(
-                and_(
-                    ModelService.id == service_id,
-                    ModelService.repository_id == repository.id,
-                )
-            )
-            result = await db.execute(service_query)
-            service = result.scalar_one_or_none()
-
-            if not service:
-                failed.append(
-                    {"service_id": service_id, "error": "服务不存在或不属于该仓库"}
-                )
-                continue
-
-            # 异步启动服务
-            background_tasks.add_task(
-                service_manager.start_service,
-                db=db,
-                service_id=service_id,
-                user_id=current_user.id,
-            )
-            successful.append(service_id)
-
-        except Exception as e:
-            failed.append({"service_id": service_id, "error": str(e)})
+    successful, failed = await BatchOperationManager.execute_batch_service_operation(
+        db=db,
+        service_ids=batch_request.service_ids,
+        repository=repository,
+        current_user=current_user,
+        operation_func=service_manager.start_service,
+        background_tasks=background_tasks,
+        operation_name="启动",
+    )
 
     return BatchServiceResponse(successful=successful, failed=failed)
 
 
-@router.post(
-    "/{username}/{repo_name}/services/batch/stop", response_model=BatchServiceResponse
-)
+@router.post("/{username}/{repo_name}/batch/stop", response_model=BatchServiceResponse)
 async def batch_stop_services(
     batch_request: BatchServiceRequest,
     repository: Repository = Depends(get_repository_with_permission),
@@ -714,49 +737,20 @@ async def batch_stop_services(
 ):
     """批量停止服务"""
 
-    # 检查权限（仓库所有者）
-    if repository.owner_id != current_user.id:
-        raise HTTPException(status_code=403, detail="只有仓库所有者可以批量操作服务")
-
-    successful = []
-    failed = []
-
-    for service_id in batch_request.service_ids:
-        try:
-            # 验证服务属于该仓库
-            service_query = select(ModelService).where(
-                and_(
-                    ModelService.id == service_id,
-                    ModelService.repository_id == repository.id,
-                )
-            )
-            result = await db.execute(service_query)
-            service = result.scalar_one_or_none()
-
-            if not service:
-                failed.append(
-                    {"service_id": service_id, "error": "服务不存在或不属于该仓库"}
-                )
-                continue
-
-            # 异步停止服务
-            background_tasks.add_task(
-                service_manager.stop_service,
-                db=db,
-                service_id=service_id,
-                user_id=current_user.id,
-            )
-            successful.append(service_id)
-
-        except Exception as e:
-            failed.append({"service_id": service_id, "error": str(e)})
+    successful, failed = await BatchOperationManager.execute_batch_service_operation(
+        db=db,
+        service_ids=batch_request.service_ids,
+        repository=repository,
+        current_user=current_user,
+        operation_func=service_manager.stop_service,
+        background_tasks=background_tasks,
+        operation_name="停止",
+    )
 
     return BatchServiceResponse(successful=successful, failed=failed)
 
 
-@router.delete(
-    "/{username}/{repo_name}/services/batch", response_model=BatchServiceResponse
-)
+@router.delete("/{username}/{repo_name}/batch", response_model=BatchServiceResponse)
 async def batch_delete_services(
     batch_request: BatchServiceRequest,
     repository: Repository = Depends(get_repository_with_permission),
@@ -766,48 +760,21 @@ async def batch_delete_services(
 ):
     """批量删除服务"""
 
-    # 检查权限（仓库所有者）
-    if repository.owner_id != current_user.id:
-        raise HTTPException(status_code=403, detail="只有仓库所有者可以批量操作服务")
-
-    successful = []
-    failed = []
-
-    for service_id in batch_request.service_ids:
-        try:
-            # 验证服务属于该仓库
-            service_query = select(ModelService).where(
-                and_(
-                    ModelService.id == service_id,
-                    ModelService.repository_id == repository.id,
-                )
-            )
-            result = await db.execute(service_query)
-            service = result.scalar_one_or_none()
-
-            if not service:
-                failed.append(
-                    {"service_id": service_id, "error": "服务不存在或不属于该仓库"}
-                )
-                continue
-
-            # 异步删除服务
-            background_tasks.add_task(
-                service_manager.delete_service,
-                db=db,
-                service_id=service_id,
-                user_id=current_user.id,
-            )
-            successful.append(service_id)
-
-        except Exception as e:
-            failed.append({"service_id": service_id, "error": str(e)})
+    successful, failed = await BatchOperationManager.execute_batch_service_operation(
+        db=db,
+        service_ids=batch_request.service_ids,
+        repository=repository,
+        current_user=current_user,
+        operation_func=service_manager.delete_service,
+        background_tasks=background_tasks,
+        operation_name="删除",
+    )
 
     return BatchServiceResponse(successful=successful, failed=failed)
 
 
 # 后台任务：定期清理空闲服务
-@router.post("/services/cleanup-idle", include_in_schema=False)
+@router.post("/cleanup-idle", include_in_schema=False)
 async def cleanup_idle_services_endpoint(
     background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_async_db)
 ):
@@ -818,7 +785,7 @@ async def cleanup_idle_services_endpoint(
 
 
 # 系统监控和统计API
-@router.get("/admin/services/statistics")
+@router.get("/admin/statistics")
 async def get_system_statistics(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db),
@@ -838,7 +805,7 @@ async def get_system_statistics(
         raise HTTPException(status_code=500, detail=f"获取统计信息失败: {str(e)}")
 
 
-@router.get("/admin/services/overview")
+@router.get("/admin/overview")
 async def get_services_overview(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db),
@@ -875,9 +842,7 @@ async def get_services_overview(
         ]
 
         # 获取最近活跃的服务
-        from datetime import datetime, timedelta
-
-        recent_threshold = datetime.utcnow() - timedelta(hours=24)
+        recent_threshold = datetime.now(timezone.utc) - timedelta(hours=24)
 
         recent_services_query = (
             select(ModelService)
@@ -914,7 +879,7 @@ async def get_services_overview(
         raise HTTPException(status_code=500, detail=f"获取服务概览失败: {str(e)}")
 
 
-@router.post("/admin/services/maintenance")
+@router.post("/admin/maintenance")
 async def perform_system_maintenance(
     current_user: User = Depends(get_current_user),
     background_tasks: BackgroundTasks = BackgroundTasks(),
@@ -962,7 +927,7 @@ async def perform_system_maintenance(
     return {"message": "系统维护任务已启动"}
 
 
-@router.get("/services/health-summary")
+@router.get("/health-summary")
 async def get_services_health_summary(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db),
@@ -1026,7 +991,7 @@ async def get_services_health_summary(
 
 
 # 容器文件管理API
-@router.post("/services/{service_id}/files/update")
+@router.post("/{service_id}/files/update")
 async def update_service_files(
     service_id: int,
     current_user: User = Depends(get_current_user_required),
@@ -1034,11 +999,13 @@ async def update_service_files(
     gogogo_file: Optional[UploadFile] = File(None, description="gogogo.py启动文件"),
     mc_config_file: Optional[UploadFile] = File(None, description="mc.json配置文件"),
     model_archive: Optional[UploadFile] = File(None, description="model目录压缩包"),
-    examples_archive: Optional[UploadFile] = File(None, description="examples目录压缩包"),
+    examples_archive: Optional[UploadFile] = File(
+        None, description="examples目录压缩包"
+    ),
 ):
     """
     更新服务文件
-    
+
     支持的文件类型：
     - gogogo_file: Python启动脚本 (.py)
     - mc_config_file: JSON配置文件 (.json)
@@ -1048,40 +1015,47 @@ async def update_service_files(
     try:
         # 检查是否至少上传了一个文件
         file_updates = {}
-        
+
         if gogogo_file:
-            if not gogogo_file.filename.endswith('.py'):
-                raise HTTPException(status_code=400, detail="gogogo文件必须是Python文件(.py)")
-            file_updates['gogogo'] = gogogo_file
-            
+            if not gogogo_file.filename.endswith(".py"):
+                raise HTTPException(
+                    status_code=400, detail="gogogo文件必须是Python文件(.py)"
+                )
+            file_updates["gogogo"] = gogogo_file
+
         if mc_config_file:
-            if not mc_config_file.filename.endswith('.json'):
-                raise HTTPException(status_code=400, detail="配置文件必须是JSON文件(.json)")
-            file_updates['mc_config'] = mc_config_file
-            
+            if not mc_config_file.filename.endswith(".json"):
+                raise HTTPException(
+                    status_code=400, detail="配置文件必须是JSON文件(.json)"
+                )
+            file_updates["mc_config"] = mc_config_file
+
         if model_archive:
-            if not any(model_archive.filename.lower().endswith(ext) for ext in ['.zip', '.tar', '.tar.gz', '.tgz']):
+            if not any(
+                model_archive.filename.lower().endswith(ext)
+                for ext in [".zip", ".tar", ".tar.gz", ".tgz"]
+            ):
                 raise HTTPException(status_code=400, detail="模型压缩包格式不支持")
-            file_updates['model'] = model_archive
-            
+            file_updates["model"] = model_archive
+
         if examples_archive:
-            if not any(examples_archive.filename.lower().endswith(ext) for ext in ['.zip', '.tar', '.tar.gz', '.tgz']):
+            if not any(
+                examples_archive.filename.lower().endswith(ext)
+                for ext in [".zip", ".tar", ".tar.gz", ".tgz"]
+            ):
                 raise HTTPException(status_code=400, detail="示例数据压缩包格式不支持")
-            file_updates['examples'] = examples_archive
-            
+            file_updates["examples"] = examples_archive
+
         if not file_updates:
             raise HTTPException(status_code=400, detail="请至少上传一个文件")
-            
+
         # 调用容器文件更新服务
         result = await container_file_service.update_service_files(
             db, service_id, file_updates, current_user.id
         )
-        
-        return {
-            "message": "文件更新完成",
-            "result": result
-        }
-        
+
+        return {"message": "文件更新完成", "result": result}
+
     except PermissionError:
         raise HTTPException(status_code=403, detail="无权限操作此服务")
     except ValueError as e:
@@ -1091,111 +1065,256 @@ async def update_service_files(
         raise HTTPException(status_code=500, detail=f"文件更新失败: {str(e)}")
 
 
-@router.post("/services/create-with-tar")
+@router.post("/{username}/{repo_name}/create_service_with_docker_tar")
 async def create_service_with_docker_tar(
-    username: str,
-    repo_name: str,
+    username: str = Path(..., description="仓库所有者用户名"),
+    repo_name: str = Path(..., description="仓库名称"),
     docker_tar: UploadFile = File(..., description="Docker镜像tar包"),
     description: Optional[str] = Form(None, description="服务描述"),
     cpu_limit: str = Form("0.3", description="CPU限制"),
     memory_limit: str = Form("256Mi", description="内存限制"),
     is_public: bool = Form(False, description="是否公开访问"),
     priority: int = Form(2, ge=0, le=3, description="启动优先级"),
-    examples_archive: Optional[UploadFile] = File(None, description="可选的examples目录压缩包"),
+    examples_archive: Optional[UploadFile] = File(
+        None, description="可选的examples目录压缩包"
+    ),
     current_user: User = Depends(get_current_user_required),
     db: AsyncSession = Depends(get_async_db),
 ):
     """
-    使用Docker tar包创建模型服务
-    
+    基于Docker tar包创建模型服务
+
     该接口用于上传Docker镜像tar包来创建服务，镜像必须包含：
     - gogogo.py: 模型服务启动文件
-    - mc.json: 配置文件  
+    - mc.json: 配置文件
     - model/: 模型文件夹
     """
     try:
+        logger.info(
+            f"开始创建服务: username={username}, repo_name={repo_name}, file={docker_tar.filename}"
+        )
+
         # 验证tar包文件
-        if not docker_tar.filename.lower().endswith(('.tar', '.tar.gz', '.tgz')):
+        if not docker_tar.filename.lower().endswith((".tar", ".tar.gz", ".tgz")):
             raise HTTPException(status_code=400, detail="Docker镜像必须是tar包格式")
-        
-        # 验证文件大小 (最大2GB)
-        max_size = 2 * 1024 * 1024 * 1024
+
+        # 验证文件大小 (最大8GB)
+        max_size = 8 * 1024 * 1024 * 1024
         if docker_tar.size and docker_tar.size > max_size:
-            raise HTTPException(status_code=400, detail="Docker镜像tar包大小不能超过2GB")
-        
-        # 获取仓库
-        repository = await get_repository_with_permission(username, repo_name, current_user, db)
-        
-        # 从tar包文件名生成服务名称
+            raise HTTPException(
+                status_code=400, detail="Docker镜像tar包大小不能超过8GB"
+            )
+
+        # 获取仓库 - 直接实现权限检查逻辑，避免依赖注入问题
+        repo_query = (
+            select(Repository)
+            .join(User, Repository.owner_id == User.id)
+            .where(and_(User.username == username, Repository.name == repo_name))
+            .options(selectinload(Repository.owner))
+        )
+
+        result = await db.execute(repo_query)
+        repository = result.scalar_one_or_none()
+
+        if not repository:
+            raise HTTPException(status_code=404, detail="仓库不存在")
+
+        # 检查权限：只有仓库所有者可以创建服务
+        ServicePermissionManager.check_repository_owner_permission(
+            repository, current_user, "创建服务"
+        )
+
+        # 从tar包文件名提取基础名称（用于生成镜像名称，服务名称将自动生成）
         import os
-        service_name = os.path.splitext(os.path.splitext(docker_tar.filename)[0])[0]
-        service_name = service_name.replace('.', '-').replace('_', '-').lower()
-        
-        # 确保服务名称符合要求
-        if len(service_name) > 30:
-            service_name = service_name[:30]
-        if not service_name or not service_name.replace('-', '').isalnum():
-            service_name = f"service-{current_user.id}-{int(time.time())}"
-        
-        # 构建服务创建数据
+
+        base_name = os.path.splitext(os.path.splitext(docker_tar.filename)[0])[0]
+        base_name = base_name.replace(".", "-").replace("_", "-").lower()
+
+        # 确保基础名称符合要求
+        if len(base_name) > 30:
+            base_name = base_name[:30]
+        if not base_name or not base_name.replace("-", "").isalnum():
+            base_name = f"service-{current_user.id}-{int(time.time())}"
+
+        # 1. 上传Docker tar包到Harbor镜像仓库
+        logger.info(f"开始上传Docker tar包到Harbor: {docker_tar.filename}")
+
+        from app.services.harbor_client import HarborClient
+        from app.models.image import Image
+
+        # 镜像基本信息
+        image_name = base_name
+        image_tag = "latest"
+        harbor_project = settings.harbor_default_project
+
+        # 确保owner被正确加载
+        if not repository.owner:
+            raise HTTPException(status_code=500, detail="仓库所有者信息缺失")
+
+        logger.info(f"准备创建镜像: {image_name}:{image_tag}")
+
+        # 检查是否已存在相同original_name:original_tag的镜像，如果存在则删除旧的
+        existing_image_query = select(Image).where(
+            and_(
+                Image.original_name == image_name,
+                Image.original_tag == image_tag,
+                Image.repository_id == repository.id,
+            )
+        )
+        result = await db.execute(existing_image_query)
+        existing_image = result.scalar_one_or_none()
+
+        if existing_image:
+            logger.info(
+                f"发现已存在镜像 {image_name}:{image_tag}，将更新覆盖: id={existing_image.id}, harbor_path={existing_image.harbor_repository_path}"
+            )
+
+            # 重置镜像状态，准备重新上传（保持ID不变）
+            existing_image.status = "uploading"
+            existing_image.upload_progress = 0
+            existing_image.error_message = None
+            existing_image.description = description or existing_image.description
+            existing_image.is_public = (
+                is_public if is_public is not None else existing_image.is_public
+            )
+            existing_image.updated_at = datetime.now(timezone.utc)
+
+            await db.commit()
+            await db.refresh(existing_image)
+
+            # 使用现有镜像对象（ID保持不变，Harbor路径也不变）
+            image = existing_image
+            logger.info(f"使用现有镜像记录进行覆盖上传: id={image.id}")
+        else:
+            # 创建新镜像记录
+            image = Image(
+                original_name=image_name,
+                original_tag=image_tag,
+                repository_id=repository.id,
+                description=description,
+                status="uploading",
+                upload_progress=0,
+                is_public=is_public,
+                created_by=current_user.id,
+            )
+
+            db.add(image)
+            await db.commit()
+            await db.refresh(image)
+            logger.info(
+                f"创建新镜像记录: id={image.id}, harbor_path={image.harbor_repository_path}"
+            )
+
+        # 上传Docker tar包到Harbor
+        try:
+
+            async def progress_callback(percent: int, stage: str):
+                """上传进度回调"""
+                image.upload_progress = percent
+                if percent == 100:
+                    image.status = "ready"
+                await db.commit()
+                logger.info(
+                    f"镜像{image.original_name}-{image.id} 上传进度: {percent}% ({stage})"
+                )
+
+            async with HarborClient() as harbor:
+                # 重置文件指针到开始位置
+                docker_tar.file.seek(0)
+
+                result = await harbor.push_image_from_tar(
+                    project_name=harbor_project,
+                    repository_name=image.harbor_repository_path,  # 使用新的简化路径
+                    tag="latest",  # 统一使用latest标签
+                    tar_file=docker_tar.file,
+                    progress_callback=progress_callback,
+                )
+
+                # 更新镜像信息
+                image.harbor_digest = result.get("digest")
+                image.harbor_size = result.get("size")
+                image.status = "ready"
+                image.upload_progress = 100
+                await db.commit()
+
+            logger.info(f"Docker镜像上传完成: {image.full_name}")
+
+        except Exception as e:
+            logger.error(f"上传Docker镜像失败: {e}")
+
+            # 区分处理：新镜像删除记录，已存在镜像标记失败
+            if existing_image:
+                # 覆盖上传失败，保留记录但标记为失败
+                image.status = "failed"
+                image.error_message = str(e)
+                await db.commit()
+                logger.info(
+                    f"覆盖上传失败，已标记镜像为失败状态: {image_name}:{image_tag} (id={image.id})"
+                )
+            else:
+                # 新镜像上传失败，删除记录
+                await db.delete(image)
+                await db.commit()
+                logger.info(f"新镜像上传失败，已删除记录: {image_name}:{image_tag}")
+
+            raise HTTPException(status_code=500, detail=f"镜像上传失败: {str(e)}")
+
+        # 2. 创建服务并关联到镜像（服务名称将根据镜像信息自动生成）
         service_data = ServiceCreate(
-            service_name=service_name,
-            model_id=service_name,  # 使用服务名称作为model_id
+            image_id=image.id,  # 使用镜像ID
             description=description,
             cpu_limit=cpu_limit,
             memory_limit=memory_limit,
             is_public=is_public,
             priority=priority,
         )
-        
-        # 创建服务
-        service = await service_manager.create_service(
+
+        logger.info(f"准备创建服务: repository_id={repository.id}, image_id={image.id}")
+        service_response = await service_manager.create_service(
             db, service_data, repository.id, current_user.id
         )
-        
-        # 更新Docker镜像信息
-        await db.refresh(service)
-        service.docker_image = docker_tar.filename  # 保存原始文件名
-        await db.commit()
-        
+        logger.info(
+            f"服务创建成功: service_id={service_response.id}, service_name={service_response.service_name}"
+        )
+
         # TODO: 处理Docker tar包 - 这里需要实现tar包的加载和验证逻辑
         # 可以考虑：
         # 1. 保存tar包到临时目录
         # 2. 验证tar包中包含必需文件
         # 3. 加载Docker镜像到Docker引擎
         # 4. 验证镜像可以正常启动
-        
+
         # 如果上传了examples文件，处理它
         if examples_archive:
-            file_updates = {'examples': examples_archive}
+            file_updates = {"examples": examples_archive}
             try:
                 await container_file_service.update_service_files(
-                    db, service.id, file_updates, current_user.id
+                    db, service_response.id, file_updates, current_user.id
                 )
             except Exception as e:
                 logger.warning(f"上传examples文件失败，但服务创建成功: {e}")
-        
+
         return {
             "message": "服务创建成功",
-            "service": ServiceResponse.model_validate(service),
+            "service": service_response,
             "docker_tar_filename": docker_tar.filename,
-            "examples_uploaded": examples_archive is not None
+            "examples_uploaded": examples_archive is not None,
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"创建服务失败: {e}")
+        logger.error(f"创建服务失败: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"服务创建失败: {str(e)}")
 
 
-@router.get("/services/{service_id}/container-info")
+@router.get("/{service_id}/container-info")
 async def get_service_container_info(
     service: ModelService = Depends(get_service_with_permission),
     current_user: Optional[User] = Depends(get_current_user),
 ):
     """获取服务容器信息"""
-    
+
     try:
         return {
             "service_id": service.id,
@@ -1207,15 +1326,15 @@ async def get_service_container_info(
             "last_updated": service.last_updated,
             "gradio_port": service.gradio_port,
             "service_url": service.service_url,
-            "status": service.status
+            "status": service.status,
         }
-        
+
     except Exception as e:
         logger.error(f"获取容器信息失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取容器信息失败: {str(e)}")
 
 
-@router.post("/services/{service_id}/validate-environment")
+@router.post("/{service_id}/validate-environment")
 async def validate_service_environment(
     service_id: int,
     current_user: User = Depends(get_current_user_required),
@@ -1223,98 +1342,84 @@ async def validate_service_environment(
 ):
     """
     验证服务环境
-    
+
     检查容器是否包含必需的文件和依赖，用于识别环境问题
     """
     try:
         # 获取服务
         service = await service_manager._get_service_by_id(db, service_id)
-        
+
         # 检查权限
-        if service.user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="无权限操作此服务")
-            
+        ServicePermissionManager.check_service_owner_permission(
+            service, current_user, "操作此服务"
+        )
+
         if not service.container_id:
             raise HTTPException(status_code=400, detail="服务容器不存在")
-            
+
         # 验证容器环境
         validation_result = await _validate_container_environment(service.container_id)
-        
+
         # 更新服务状态
-        if validation_result['is_valid']:
+        if validation_result["is_valid"]:
             service.health_status = "healthy"
             service.error_message = None
         else:
             service.health_status = "unhealthy"
             service.error_message = f"环境验证失败: {validation_result['error']}"
-            
+
         await db.commit()
-        
+
         return {
             "service_id": service_id,
             "validation_result": validation_result,
-            "health_status": service.health_status
+            "health_status": service.health_status,
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"验证服务环境失败: {e}")
         raise HTTPException(status_code=500, detail=f"环境验证失败: {str(e)}")
-        
+
 
 async def _validate_container_environment(container_id: str) -> Dict[str, Any]:
     """验证容器环境"""
-    
+
     try:
         if not service_manager.docker_client:
-            return {
-                'is_valid': False,
-                'error': 'Docker客户端未初始化'
-            }
-            
+            return {"is_valid": False, "error": "Docker客户端未初始化"}
+
         container = service_manager.docker_client.containers.get(container_id)
-        
+
         # 检查必需文件
-        required_files = ['/app/gogogo.py', '/app/mc.json', '/app/model']
+        required_files = ["/app/gogogo.py", "/app/mc.json", "/app/model"]
         missing_files = []
-        
+
         for file_path in required_files:
             try:
-                result = container.exec_run(f'test -e {file_path}')
+                result = container.exec_run(f"test -e {file_path}")
                 if result.exit_code != 0:
                     missing_files.append(file_path)
             except Exception:
                 missing_files.append(file_path)
-                
+
         if missing_files:
             return {
-                'is_valid': False,
-                'error': f'缺少必需文件: {", ".join(missing_files)}',
-                'missing_files': missing_files
+                "is_valid": False,
+                "error": f'缺少必需文件: {", ".join(missing_files)}',
+                "missing_files": missing_files,
             }
-            
+
         # 检查Python环境
         try:
-            result = container.exec_run('python --version')
+            result = container.exec_run("python --version")
             if result.exit_code != 0:
-                return {
-                    'is_valid': False,
-                    'error': 'Python环境不可用'
-                }
+                return {"is_valid": False, "error": "Python环境不可用"}
         except Exception:
-            return {
-                'is_valid': False,
-                'error': 'Python环境检查失败'
-            }
-            
-        return {
-            'is_valid': True,
-            'message': '环境验证通过'
-        }
-        
+            return {"is_valid": False, "error": "Python环境检查失败"}
+
+        return {"is_valid": True, "message": "环境验证通过"}
+
     except Exception as e:
-        return {
-            'is_valid': False,
-            'error': f'验证过程出错: {str(e)}'
-        }
+        return {"is_valid": False, "error": f"验证过程出错: {str(e)}"}

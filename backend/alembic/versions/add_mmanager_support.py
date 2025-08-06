@@ -1,6 +1,6 @@
 """add mManager support tables
 
-Revision ID: mmanager_001
+Revision ID: add_mmanager_support
 Revises: add_docker_container_fields
 Create Date: 2024-12-01 00:00:00.000000
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers
-revision = 'mmanager_001'
+revision = 'add_mmanager_support'
 down_revision = 'add_docker_container_fields'
 branch_labels = None
 depends_on = None

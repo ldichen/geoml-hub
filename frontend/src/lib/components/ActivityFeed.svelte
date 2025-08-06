@@ -31,7 +31,7 @@
         error = '';
         
         try {
-            const response = await api.activities.list({
+            const response = await api.getActivities({
                 user_id: userId,
                 types: showTypes.join(','),
                 page,

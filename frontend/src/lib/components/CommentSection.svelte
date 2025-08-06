@@ -33,7 +33,7 @@
         error = '';
         
         try {
-            const response = await api.comments.list(resourceType, resourceId);
+            const response = await api.getComments(resourceType, resourceId);
             comments = buildCommentTree(response.data || response);
         } catch (err) {
             console.error('Failed to load comments:', err);
@@ -74,7 +74,7 @@
         posting = true;
         
         try {
-            const response = await api.comments.create(resourceType, resourceId, {
+            const response = await api.createComment(resourceType, resourceId, {
                 content: newComment.trim()
             });
             
@@ -97,7 +97,7 @@
         posting = true;
         
         try {
-            const response = await api.comments.create(resourceType, resourceId, {
+            const response = await api.createComment(resourceType, resourceId, {
                 content: replyText.trim(),
                 parent_id: parentId
             });
@@ -135,11 +135,11 @@
         
         try {
             if (comment.is_liked) {
-                await api.comments.unlike(comment.id);
+                await api.unlikeComment(comment.id);
                 comment.is_liked = false;
                 comment.likes_count -= 1;
             } else {
-                await api.comments.like(comment.id);
+                await api.likeComment(comment.id);
                 comment.is_liked = true;
                 comment.likes_count += 1;
             }

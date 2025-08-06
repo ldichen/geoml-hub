@@ -2,7 +2,22 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.config import settings
-from app.routers import auth, classifications, users, repositories, search, admin, files, metadata, discover, system, file_editor, personal_files, services, images
+from app.routers import (
+    auth,
+    classifications,
+    users,
+    repositories,
+    search,
+    admin,
+    files,
+    metadata,
+    discover,
+    system,
+    file_editor,
+    personal_files,
+    services,
+    images,
+)
 from app.middleware.error_handler import add_exception_handlers
 from app.services.model_service import service_manager
 from app.database import get_async_db
@@ -10,18 +25,17 @@ import logging
 import asyncio
 
 # Configure logging
-logging.basicConfig(
-    level=getattr(logging, settings.log_level.upper()),
-    format=settings.log_format,
-)
+from app.utils.logger import setup_logging, get_logger
 
-logger = logging.getLogger(__name__)
+setup_logging()
+logger = get_logger(__name__)
+
 
 # 应用启动事件
 async def startup_event():
     """应用启动时初始化服务"""
     logger.info("初始化 GeoML-Hub v2.0 服务...")
-    
+
     # 初始化服务管理器和mManager客户端
     async for db in get_async_db():
         try:
@@ -32,6 +46,7 @@ async def startup_event():
             logger.error(f"服务管理器初始化失败: {e}")
         finally:
             await db.close()
+
 
 # Create FastAPI app
 app = FastAPI(
@@ -60,10 +75,14 @@ add_exception_handlers(app)
 
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
-app.include_router(classifications.router, prefix="/api/classifications", tags=["classifications"])
+app.include_router(
+    classifications.router, prefix="/api/classifications", tags=["classifications"]
+)
 # v2.0 核心路由
 app.include_router(users.router, prefix="/api/users", tags=["users"])
-app.include_router(repositories.router, prefix="/api/repositories", tags=["repositories"])
+app.include_router(
+    repositories.router, prefix="/api/repositories", tags=["repositories"]
+)
 # 搜索和发现
 app.include_router(search.router, prefix="/api/search", tags=["search"])
 # 顶级发现端点
@@ -81,9 +100,9 @@ app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 # 系统配置
 app.include_router(system.router, prefix="/api/system", tags=["system"])
 # 模型服务管理
-app.include_router(services.router, tags=["services"])
+app.include_router(services.router, prefix="/api/services", tags=["services"])
 # 镜像管理
-app.include_router(images.router, prefix="/api", tags=["images"])
+app.include_router(images.router, prefix="/api/images", tags=["images"])
 
 
 @app.get("/")
@@ -101,8 +120,8 @@ async def root():
             "MinIO 对象存储与大文件分片上传",
             "三级分类体系与全文搜索",
             "趋势发现与搜索建议",
-            "系统管理与监控面板"
-        ]
+            "系统管理与监控面板",
+        ],
     }
 
 
@@ -114,4 +133,5 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)

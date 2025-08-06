@@ -1,5 +1,7 @@
 from pydantic_settings import BaseSettings
+from pydantic import field_validator
 from typing import List
+import json
 
 
 class Settings(BaseSettings):
@@ -54,17 +56,37 @@ class Settings(BaseSettings):
     mmanager_controllers: List[dict] = [
         {
             "id": "mmanager-local-01",
-            "url": "http://localhost:8001",
+            "url": "http://localhost:8000",
             "server_type": "cpu",
             "enabled": True,
             "priority": 1,
-            "weight": 100
+            "weight": 100,
         }
     ]
     
+    @field_validator('mmanager_controllers', mode='before')
+    @classmethod
+    def parse_mmanager_controllers(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                # 如果解析失败，返回默认值
+                return [
+                    {
+                        "id": "mmanager-local-01",
+                        "url": "http://localhost:8000",
+                        "server_type": "cpu",
+                        "enabled": True,
+                        "priority": 1,
+                        "weight": 100,
+                    }
+                ]
+        return v
+
     # Service Configuration (updated for mManager)
     service_domain: str = "localhost"
-    
+
     # Harbor Configuration
     harbor_url: str = "http://localhost:8080"
     harbor_username: str = "admin"
@@ -106,7 +128,6 @@ class Settings(BaseSettings):
     max_auto_start_retries: int = 3  # 最大自动启动重试次数
     exponential_backoff_enabled: bool = True  # 是否启用指数退避重试
     max_retry_delay: int = 3600  # 最大重试延迟时间(秒)，默认1小时
-
 
     # Resource Limits
     default_cpu_limit: str = "0.3"  # 默认CPU限制

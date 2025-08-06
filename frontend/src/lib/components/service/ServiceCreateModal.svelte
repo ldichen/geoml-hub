@@ -130,8 +130,10 @@
       dispatch('create', { type: 'docker-upload', data: submitFormData });
     } else if (creationMode === 'existing-image') {
       // 新方式：基于已有镜像创建服务
+      // 不再需要手动生成服务名称，后端会自动处理
       const submitData = {
-        image_id: formData.selected_image_id,
+        // service_name 不再需要，后端会自动生成
+        image_id: formData.selected_image_id, // 使用 image_id 而非 model_id
         description: formData.description,
         cpu_limit: formData.cpu_limit,
         memory_limit: formData.memory_limit,
@@ -264,7 +266,7 @@
     <!-- Modal Container -->
     <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-3xl w-full mx-4 max-h-[100vh] overflow-hidden border border-gray-200 dark:border-gray-700">
       <!-- Header -->
-      <div class="relative bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-700 px-6 py-5 border-b border-gray-200 dark:border-gray-600">
+      <div class="relative bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-700 px-6 py-4 border-b border-gray-200 dark:border-gray-600">
         <div class="flex items-center space-x-3">
           <div class="flex items-center justify-center w-10 h-10 bg-blue-100 dark:bg-blue-900 rounded-xl">
             <Settings class="w-5 h-5 text-blue-600 dark:text-blue-400" />
@@ -290,9 +292,9 @@
       <!-- Form -->
       <form bind:this={formElement} on:submit|preventDefault={handleSubmit}>
         <div class="overflow-y-auto max-h-[calc(90vh-120px)]">
-          <div class="p-4 space-y-6">
+          <div class="p-4 space-y-4">
             <!-- Creation Mode Selector -->
-            <div class="bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-gray-800 dark:to-gray-700 rounded-xl p-6 border border-indigo-200 dark:border-gray-600">
+            <div class="bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-gray-800 dark:to-gray-700 rounded-xl p-4 border border-indigo-200 dark:border-gray-600">
               <h4 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">选择创建方式</h4>
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <!-- Docker Upload Option -->
@@ -307,10 +309,10 @@
                   />
                   <div class="flex flex-col p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 hover:shadow-md {creationMode === 'docker-upload' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'}">
                     <div class="flex items-center justify-between mb-2">
-                      <span class="font-medium text-sm text-gray-900 dark:text-white">上传Docker镜像</span>
-                      <span class="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 px-2 py-1 rounded-full">传统方式</span>
+                      <span class="font-medium text-sm text-gray-900 dark:text-white">上传模型镜像</span>
+                      <span class="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 px-2 py-1 rounded-full">手动部署</span>
                     </div>
-                    <p class="text-xs text-gray-600 dark:text-gray-400">直接上传Docker tar包创建服务</p>
+                    <p class="text-xs text-gray-600 dark:text-gray-400">直接上传模型镜像tar包创建服务</p>
                   </div>
                 </label>
 
@@ -339,7 +341,7 @@
 
             <!-- Docker Requirements Notice (仅在docker-upload模式显示) -->
             {#if creationMode === 'docker-upload'}
-            <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-xl p-6">
+            <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-xl p-4">
               <div class="flex items-start space-x-3">
                 <div class="flex-shrink-0">
                   <Info class="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" />
@@ -359,9 +361,6 @@
                     <ul class="list-disc list-inside ml-2">
                       <li><code class="bg-blue-100 dark:bg-blue-800 px-1.5 py-0.5 rounded text-xs font-mono">examples/</code> - 用于展示的样例数据文件夹（可后续上传）</li>
                     </ul>
-                    <p class="mt-2 text-xs">
-                      <strong>注意</strong>：上传的容器应是完全可运行的，不允许存在依赖缺失或环境配置错误。
-                    </p>
                   </div>
                 </div>
               </div>
@@ -381,9 +380,6 @@
               </div>
               
               <div class="space-y-3">
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  可用镜像 <span class="text-red-500">*</span>
-                </label>
                 
                 {#if availableImages.length > 0}
                   <div class="grid gap-3">
@@ -437,8 +433,8 @@
             {/if}
 
             <!-- Basic Information Section -->
-            <div class="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
-              <div class="flex items-center space-x-2 mb-4">
+            <div class="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+              <div class="flex items-center space-x-2 mb-2">
                 <div class="flex items-center justify-center w-8 h-8 bg-blue-100 dark:bg-blue-900 rounded-lg">
                   <Info class="w-4 h-4 text-blue-600 dark:text-blue-400" />
                 </div>
@@ -594,7 +590,7 @@
             </div>
 
             <!-- Advanced Configuration Section -->
-            <div class="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+            <div class="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
               <div class="flex items-center space-x-2 mb-4">
                 <div class="flex items-center justify-center w-8 h-8 bg-purple-100 dark:bg-purple-900 rounded-lg">
                   <Settings class="w-4 h-4 text-purple-600 dark:text-purple-400" />

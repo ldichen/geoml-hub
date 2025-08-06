@@ -35,7 +35,7 @@
         if (!$user) return;
         
         try {
-            const response = await api.notifications.getUnreadCount();
+            const response = await api.getUnreadNotificationsCount();
             unreadCount = response.count || 0;
         } catch (err) {
             console.error('Failed to load unread count:', err);

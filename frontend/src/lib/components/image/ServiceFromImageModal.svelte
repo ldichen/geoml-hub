@@ -4,17 +4,20 @@
 	import LoadingSpinner from '$lib/components/common/LoadingSpinner.svelte';
 
 	export let image;
+	export let owner = null; // 仓库所有者
+	export let repository = null; // 仓库名称
 
 	const dispatch = createEventDispatcher();
 
 	let formData = {
-		service_name: '',
+		// service_name 不再需要，后端会自动生成
 		description: '',
 		cpu_limit: '0.5',
 		memory_limit: '512m',
 		gradio_port: null,
 		is_public: false,
-		priority: 2
+		priority: 2,
+		image_id: null // 使用 image_id 而非 model_id
 	};
 
 	let creating = false;
@@ -50,11 +53,10 @@
 
 	let selectedPreset = 'recommended';
 
-	// 自动生成服务名称
-	function generateServiceName() {
-		if (!formData.service_name) {
-			const timestamp = Date.now().toString().slice(-6);
-			formData.service_name = `${image.name}-service-${timestamp}`;
+	// 初始化 image_id
+	function initializeImageId() {
+		if (image && image.id) {
+			formData.image_id = image.id;
 		}
 	}
 
@@ -69,12 +71,8 @@
 
 	// 验证表单
 	function validateForm() {
-		if (!formData.service_name.trim()) {
-			throw new Error('请输入服务名称');
-		}
-		
-		if (!/^[a-zA-Z0-9][a-zA-Z0-9-]*$/.test(formData.service_name)) {
-			throw new Error('服务名称只能包含字母、数字和连字符，且必须以字母或数字开头');
+		if (!formData.image_id) {
+			throw new Error('未指定镜像 ID');
 		}
 		
 		if (!formData.cpu_limit.trim()) {
@@ -121,16 +119,21 @@
 			});
 
 			// 创建服务
-			const response = await api.createServiceFromImage(image.id, submitFormData);
-			
-			if (response.success) {
-				dispatch('created', {
-					service: response.data,
-					image: image
-				});
-			} else {
-				throw new Error(response.error || '创建服务失败');
+			if (!owner || !repository) {
+				throw new Error('缺少仓库信息，无法创建服务');
 			}
+			
+			const response = await api.createService(
+				owner, 
+				repository, 
+				submitFormData
+			);
+			
+			// API客户端在成功时直接返回数据，失败时抛出异常
+			dispatch('created', {
+				service: response,
+				image: image
+			});
 
 		} catch (err) {
 			console.error('创建服务失败:', err);
@@ -147,8 +150,8 @@
 		}
 	}
 
-	// 初始化时生成服务名称
-	generateServiceName();
+	// 初始化时设置 image_id
+	initializeImageId();
 </script>
 
 <!-- 模态框背景 -->
@@ -180,26 +183,17 @@
 			<div class="mb-6">
 				<h3 class="text-lg font-medium text-gray-900 mb-4">基本信息</h3>
 				
-				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-					<div>
-						<label for="serviceName" class="block text-sm font-medium text-gray-700 mb-2">
-							服务名称
-							<span class="text-red-500">*</span>
-						</label>
-						<input
-							id="serviceName"
-							type="text"
-							bind:value={formData.service_name}
-							class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-							placeholder="例如: my-model-service"
-							disabled={creating}
-							required
-						/>
-						<p class="mt-1 text-xs text-gray-500">
-							只能包含字母、数字和连字符
-						</p>
-					</div>
+				<!-- 自动生成服务名称提示 -->
+				<div class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+					<p class="text-sm text-blue-800">
+						<svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+						</svg>
+						服务名称将根据镜像信息自动生成，格式为：{image.name}-{image.id}-随机字符串
+					</p>
+				</div>
 
+				<div class="grid grid-cols-1 gap-4">
 					<div>
 						<label for="priority" class="block text-sm font-medium text-gray-700 mb-2">
 							启动优先级
@@ -392,14 +386,26 @@
 
 <style>
 	.btn {
-		@apply px-4 py-2 rounded-lg font-medium transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+		@apply px-4 py-2 rounded-lg font-medium transition-colors duration-200;
+	}
+	
+	.btn:disabled {
+		@apply opacity-50 cursor-not-allowed;
 	}
 
 	.btn-primary {
-		@apply bg-blue-600 text-white hover:bg-blue-700 flex items-center;
+		@apply bg-blue-600 text-white flex items-center;
+	}
+	
+	.btn-primary:hover {
+		@apply bg-blue-700;
 	}
 
 	.btn-outline {
-		@apply border border-gray-300 text-gray-700 hover:bg-gray-50;
+		@apply border border-gray-300 text-gray-700;
+	}
+	
+	.btn-outline:hover {
+		@apply bg-gray-50;
 	}
 </style>

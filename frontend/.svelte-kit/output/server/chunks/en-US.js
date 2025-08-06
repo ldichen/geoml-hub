@@ -213,6 +213,9 @@ const pagination = {
   items: "{total} items",
   showing: "Showing {from} - {to} of {total} items"
 };
+const openGMS = {
+  openGMS: "OpenGMS"
+};
 const enUS = {
   app,
   navigation,
@@ -225,7 +228,8 @@ const enUS = {
   theme,
   language,
   error,
-  pagination
+  pagination,
+  openGMS
 };
 export {
   app,
@@ -237,6 +241,7 @@ export {
   language,
   model,
   navigation,
+  openGMS,
   pagination,
   search,
   service,

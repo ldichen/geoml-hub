@@ -7,7 +7,7 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.config import settings
 from app.middleware import AuthenticationMiddleware, LoggingMiddleware
@@ -102,7 +102,7 @@ async def root():
         "version": "1.0.0",
         "server_id": settings.server_id,
         "server_type": settings.server_type,
-        "timestamp": datetime.now(datetime.timezone.utc).isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "status": "running",
         "endpoints": {
             "health": "/health",

@@ -161,7 +161,7 @@
 				<svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"></path>
 				</svg>
-				<span>已创建 {image.service_count}/2 个服务</span>
+				<span>已创建 {image.service_count || 0}/2 个服务</span>
 			</div>
 
 			{#if image.status === 'ready'}
@@ -201,7 +201,11 @@
 	}
 
 	.btn {
-		@apply px-3 py-1.5 rounded-lg font-medium transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+		@apply px-3 py-1.5 rounded-lg font-medium transition-colors duration-200;
+	}
+	
+	.btn:disabled {
+		@apply opacity-50 cursor-not-allowed;
 	}
 
 	.btn-sm {
@@ -209,10 +213,18 @@
 	}
 
 	.btn-primary {
-		@apply bg-blue-600 text-white hover:bg-blue-700;
+		@apply bg-blue-600 text-white;
+	}
+	
+	.btn-primary:hover {
+		@apply bg-blue-700;
 	}
 
 	.btn-outline {
-		@apply border border-gray-300 text-gray-700 hover:bg-gray-50;
+		@apply border border-gray-300 text-gray-700;
+	}
+	
+	.btn-outline:hover {
+		@apply bg-gray-50;
 	}
 </style>

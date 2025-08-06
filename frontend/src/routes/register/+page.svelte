@@ -3,7 +3,7 @@
     import { goto } from '$app/navigation';
     import { login as authLogin } from '$lib/stores/auth.js';
     import { redirectIfAuthenticated } from '$lib/utils/auth.js';
-    import { authApi } from '$lib/utils/api.js';
+    import { api } from '$lib/utils/api.js';
     import { _ } from 'svelte-i18n';
     
     let formData = {
@@ -82,7 +82,7 @@
         
         try {
             // 使用新的OpenGMS注册API
-            const response = await authApi.register(
+            const response = await api.register(
                 formData.email,
                 formData.password,
                 formData.username,

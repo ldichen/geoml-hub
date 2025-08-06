@@ -35,9 +35,9 @@
       error = null;
 
       const requests = [
-        api.getUser(username),
-        api.getUserStats(username),
-        api.getUserRepositories(username, { per_page: 20 })
+        api.getUserByUsername(username),
+        api.getUserStatsByUsername(username),
+        api.getUserRepositoriesByUsername(username, { per_page: 20 })
       ];
 
       // Only fetch storage info if viewing own profile or user has permissions
@@ -108,11 +108,11 @@
 
     try {
       if (isFollowing) {
-        await api.unfollowUser(username);
+        await api.unfollowUserByUsername(username);
         isFollowing = false;
         user.followers_count -= 1;
       } else {
-        await api.followUser(username);
+        await api.followUserByUsername(username);
         isFollowing = true;
         user.followers_count += 1;
       }

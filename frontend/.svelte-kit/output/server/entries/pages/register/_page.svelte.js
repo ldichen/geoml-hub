@@ -1,6 +1,5 @@
 import { s as subscribe } from "../../../chunks/utils.js";
 import { c as create_ssr_component, e as escape, b as add_attribute } from "../../../chunks/ssr.js";
-import "../../../chunks/api.js";
 import { $ as $format } from "../../../chunks/runtime.esm.js";
 const Page = create_ssr_component(($$result, $$props, $$bindings, slots) => {
   let $_, $$unsubscribe__;
