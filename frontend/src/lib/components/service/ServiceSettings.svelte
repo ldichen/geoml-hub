@@ -138,17 +138,17 @@
 
   // CPU and Memory presets
   const cpuPresets = [
-    { value: '0.1', label: '0.1 cores' },
-    { value: '0.2', label: '0.2 cores' },
-    { value: '0.5', label: '0.5 cores' },
-    { value: '1.0', label: '1.0 cores' }
+    { value: '1', label: '1 cores' },
+    { value: '2', label: '2 cores' },
+    { value: '4', label: '4 cores' },
+    { value: '8', label: '8 cores' }
   ];
 
   const memoryPresets = [
-    { value: '128Mi', label: '128Mi' },
-    { value: '256Mi', label: '256Mi' },
-    { value: '512Mi', label: '512Mi' },
-    { value: '1Gi', label: '1Gi' }
+    { value: '1Gi', label: '1Gi' },
+    { value: '2Gi', label: '2Gi' },
+    { value: '4Gi', label: '4Gi' },
+    { value: '8Gi', label: '8Gi' }
   ];
 </script>
 

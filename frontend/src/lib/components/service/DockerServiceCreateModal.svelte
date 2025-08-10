@@ -14,8 +14,8 @@
     docker_image: '',
     description: '',
     gradio_port: 7860,
-    cpu_limit: '0.3',
-    memory_limit: '256Mi',
+    cpu_limit: '2',
+    memory_limit: '2Gi',
     is_public: false,
     priority: 2
   };
@@ -24,9 +24,9 @@
   let fileInputRef: HTMLInputElement;
   
   const resourceConfigs = {
-    lightweight: { cpu: '0.1', memory: '128Mi', label: '轻量 (0.1 核, 128Mi)' },
-    recommended: { cpu: '0.3', memory: '256Mi', label: '推荐 (0.3 核, 256Mi)' },
-    performance: { cpu: '0.5', memory: '512Mi', label: '性能 (0.5 核, 512Mi)' }
+    lightweight: { cpu: '1', memory: '1Gi', label: '轻量 (1 核, 1Gi)' },
+    recommended: { cpu: '2', memory: '2Gi', label: '推荐 (2 核, 2Gi)' },
+    performance: { cpu: '4', memory: '5Gi', label: '性能 (4 核, 4Gi)' }
   };
   
   const priorityOptions = [
@@ -175,8 +175,8 @@
       docker_image: '',
       description: '',
       gradio_port: 7860,
-      cpu_limit: '0.3',
-      memory_limit: '256Mi',
+      cpu_limit: '2',
+      memory_limit: '2Gi',
       is_public: false,
       priority: 2
     };

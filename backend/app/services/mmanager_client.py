@@ -24,7 +24,7 @@ class MManagerClient:
     def __init__(self, controller_url: str, api_key: str):
         self.controller_url = controller_url.rstrip("/")
         self.api_key = api_key
-        self.timeout = aiohttp.ClientTimeout(total=30)
+        self.timeout = aiohttp.ClientTimeout(total=180)
 
     async def _request(self, method: str, endpoint: str, **kwargs) -> Dict:
         """通用请求方法"""
@@ -74,7 +74,9 @@ class MManagerClient:
     async def remove_container(self, container_id: str, force: bool = True) -> Dict:
         """删除容器"""
         return await self._request(
-            "DELETE", f"/containers/{container_id}", params={"force": str(force).lower()}
+            "DELETE",
+            f"/containers/{container_id}",
+            params={"force": str(force).lower()},
         )
 
     async def get_container_info(self, container_id: str) -> Dict:
@@ -283,13 +285,13 @@ class MManagerControllerManager:
     ) -> Optional[Dict]:
         """查找容器位置"""
         logger.info(f"查找容器位置: {container_id}")
-        
+
         # 从 ModelService 表查找容器信息
         result = await db.execute(
             select(ModelService).where(ModelService.container_id == container_id)
         )
         service = result.scalar_one_or_none()
-        
+
         if service:
             logger.info(f"在数据库中找到服务记录，model_ip: {service.model_ip}")
         else:
@@ -302,7 +304,7 @@ class MManagerControllerManager:
             if "://" in client.controller_url
         ]
         logger.info(f"可用的控制器IPs: {controller_ips}")
-        
+
         if service and service.model_ip in controller_ips:
             controller_id = next(
                 (
@@ -321,8 +323,10 @@ class MManagerControllerManager:
                     "service": service,
                 }
         # 如果 ModelService 中没有，广播查询所有控制器
-        logger.info(f"数据库匹配失败，开始广播查询所有控制器: {list(self.controllers.keys())}")
-        
+        logger.info(
+            f"数据库匹配失败，开始广播查询所有控制器: {list(self.controllers.keys())}"
+        )
+
         for controller_id, client in self.controllers.items():
             try:
                 logger.debug(f"查询控制器 {controller_id} 是否有容器 {container_id}")
@@ -619,6 +623,92 @@ class MManagerControllerManager:
         except Exception as e:
             logger.error(f"确保镜像可用过程中发生系统错误: {e}")
             return False
+
+    async def cleanup_image_from_all_controllers(
+        self, image_name: str
+    ) -> Dict[str, Any]:
+        """从所有控制器清理指定镜像"""
+        cleanup_results = {
+            "image_name": image_name,
+            "controllers_processed": 0,
+            "successful_removals": 0,
+            "failed_removals": 0,
+            "results": [],
+            "errors": [],
+        }
+
+        try:
+            # 遍历所有控制器
+            for controller_id in list(self.controllers.keys()):
+                cleanup_results["controllers_processed"] += 1
+
+                try:
+                    # 检查镜像是否存在
+                    image_info = await self.get_image_info(controller_id, image_name)
+
+                    if image_info:
+                        # 镜像存在，尝试删除
+                        success = await self.remove_image(
+                            controller_id, image_name, force=True
+                        )
+
+                        if success:
+                            cleanup_results["successful_removals"] += 1
+                            cleanup_results["results"].append(
+                                {
+                                    "controller_id": controller_id,
+                                    "status": "removed",
+                                    "message": "镜像成功删除",
+                                }
+                            )
+                            logger.info(
+                                f"成功从控制器 {controller_id} 删除镜像 {image_name}"
+                            )
+                        else:
+                            cleanup_results["failed_removals"] += 1
+                            cleanup_results["results"].append(
+                                {
+                                    "controller_id": controller_id,
+                                    "status": "failed",
+                                    "message": "删除操作失败",
+                                }
+                            )
+                            logger.warning(
+                                f"从控制器 {controller_id} 删除镜像 {image_name} 失败"
+                            )
+                    else:
+                        # 镜像不存在，标记为已清理
+                        cleanup_results["results"].append(
+                            {
+                                "controller_id": controller_id,
+                                "status": "not_found",
+                                "message": "镜像不存在，无需删除",
+                            }
+                        )
+                        logger.info(f"控制器 {controller_id} 上不存在镜像 {image_name}")
+
+                except Exception as e:
+                    cleanup_results["failed_removals"] += 1
+                    error_msg = f"控制器 {controller_id} 清理失败: {str(e)}"
+                    cleanup_results["errors"].append(error_msg)
+                    cleanup_results["results"].append(
+                        {
+                            "controller_id": controller_id,
+                            "status": "error",
+                            "message": str(e),
+                        }
+                    )
+                    logger.error(error_msg)
+
+            logger.info(
+                f"镜像清理完成: {image_name}, 成功: {cleanup_results['successful_removals']}, 失败: {cleanup_results['failed_removals']}"
+            )
+            return cleanup_results
+
+        except Exception as e:
+            logger.error(f"清理镜像过程中发生系统错误: {e}")
+            cleanup_results["errors"].append(f"系统错误: {str(e)}")
+            return cleanup_results
 
 
 # 全局控制器管理器实例

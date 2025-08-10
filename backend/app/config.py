@@ -63,8 +63,8 @@ class Settings(BaseSettings):
             "weight": 100,
         }
     ]
-    
-    @field_validator('mmanager_controllers', mode='before')
+
+    @field_validator("mmanager_controllers", mode="before")
     @classmethod
     def parse_mmanager_controllers(cls, v):
         if isinstance(v, str):
@@ -130,10 +130,10 @@ class Settings(BaseSettings):
     max_retry_delay: int = 3600  # 最大重试延迟时间(秒)，默认1小时
 
     # Resource Limits
-    default_cpu_limit: str = "0.3"  # 默认CPU限制
-    default_memory_limit: str = "256Mi"  # 默认内存限制
-    max_cpu_limit: str = "0.5"  # 最大CPU限制
-    max_memory_limit: str = "512Mi"  # 最大内存限制
+    default_cpu_limit: str = "2"  # 默认CPU限制
+    default_memory_limit: str = "2Gi"  # 默认内存限制
+    max_cpu_limit: str = "8"  # 最大CPU限制
+    max_memory_limit: str = "8Gi"  # 最大内存限制
 
     class Config:
         env_file = ".env"

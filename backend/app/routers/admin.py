@@ -646,13 +646,18 @@ async def hard_delete_repository(
     admin_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_async_db),
 ):
-    """永久删除仓库（硬删除）"""
+    """永久删除仓库（硬删除）- 级联删除镜像和服务"""
 
     if not confirm:
         raise HTTPException(status_code=400, detail="需要确认删除操作")
 
-    # 查询包括非活跃仓库
-    repo_query = select(Repository).where(Repository.id == repository_id)
+    # 查询包括非活跃仓库，预加载所有关联数据
+    repo_query = select(Repository).options(
+        selectinload(Repository.images).selectinload(Image.services),
+        selectinload(Repository.model_services),
+        selectinload(Repository.files)
+    ).where(Repository.id == repository_id)
+    
     repo_result = await db.execute(repo_query)
     repository = repo_result.scalar_one_or_none()
 
@@ -660,35 +665,110 @@ async def hard_delete_repository(
         raise HTTPException(status_code=404, detail="仓库不存在")
 
     from app.services.repository_service import RepositoryService
+    from app.services.model_service import service_manager
+    from app.services.harbor_client import HarborClient
+    from app.services.mmanager_client import mmanager_client
+    from app.models.image import Image
 
     repo_service = RepositoryService(db)
+    
+    deletion_summary = {
+        "repository_id": repository_id,
+        "repository_name": repository.full_name,
+        "images_deleted": 0,
+        "services_deleted": 0,
+        "files_deleted": 0,
+        "harbor_cleanup": [],
+        "mmanager_cleanup": [],
+        "errors": []
+    }
 
     try:
-        # 删除MinIO中的所有文件
-        files_query = select(RepositoryFile).where(
-            RepositoryFile.repository_id == repository_id
-        )
-        files_result = await db.execute(files_query)
-        files = files_result.scalars().all()
+        # 1. 停止并删除所有服务（包括通过镜像关联的服务）
+        all_services = set(repository.model_services)  # 直接关联的服务
+        
+        # 添加通过镜像关联的服务
+        for image in repository.images:
+            all_services.update(image.services)
+        
+        for service in all_services:
+            try:
+                # 停止服务（如果正在运行）
+                if service.status in ['running', 'starting']:
+                    await service_manager.stop_service(db, service.id, admin_user.id)
+                
+                # 删除容器
+                if service.container_id:
+                    await service_manager.delete_service(db, service.id, admin_user.id)
+                    deletion_summary["mmanager_cleanup"].append({
+                        "container_id": service.container_id,
+                        "service_name": service.service_name,
+                        "status": "deleted"
+                    })
+                
+                deletion_summary["services_deleted"] += 1
+                
+            except Exception as e:
+                error_msg = f"删除服务 {service.id} 失败: {str(e)}"
+                deletion_summary["errors"].append(error_msg)
+                logger.warning(error_msg)
 
-        for file in files:
+        # 2. 删除所有镜像
+        for image in repository.images:
+            try:
+                # 从Harbor删除镜像
+                async with HarborClient() as harbor_client:
+                    await harbor_client.delete_repository(
+                        project_name=harbor_client.harbor_default_project,
+                        repository_name=image.harbor_repository_path
+                    )
+                deletion_summary["harbor_cleanup"].append({
+                    "image_name": image.harbor_repository_path,
+                    "status": "deleted"
+                })
+                
+                # 从mManager控制器清理镜像
+                try:
+                    await mmanager_client.cleanup_image_from_all_controllers(
+                        image.full_docker_image_name
+                    )
+                except Exception as e:
+                    logger.warning(f"mManager镜像清理失败: {e}")
+                    deletion_summary["errors"].append(f"mManager清理失败 {image.id}: {str(e)}")
+                
+                deletion_summary["images_deleted"] += 1
+                
+            except Exception as e:
+                error_msg = f"删除镜像 {image.id} 失败: {str(e)}"
+                deletion_summary["errors"].append(error_msg)
+                logger.warning(error_msg)
+
+        # 3. 删除MinIO中的所有文件
+        for file in repository.files:
             try:
                 await repo_service.minio_service.delete_file(
                     bucket_name=getattr(file, "minio_bucket"),
                     object_key=getattr(file, "minio_object_key"),
                 )
+                deletion_summary["files_deleted"] += 1
             except Exception as e:
-                logger.warning(f"Failed to delete file {file.minio_object_key}: {e}")
+                error_msg = f"删除文件 {file.filename} 失败: {str(e)}"
+                deletion_summary["errors"].append(error_msg)
+                logger.warning(f"删除文件失败 {file.minio_object_key}: {e}")
 
-        # 删除数据库记录（级联删除会处理关联表）
+        # 4. 删除数据库记录（级联删除会处理关联表）
         await db.delete(repository)
         await db.commit()
 
-        return {"message": f"仓库 {repository.full_name} 已永久删除"}
+        return {
+            "success": True,
+            "message": f"仓库 {repository.full_name} 及所有关联资源已永久删除",
+            "deletion_summary": deletion_summary
+        }
 
     except Exception as e:
         await db.rollback()
-        logger.error(f"Hard delete repository failed: {e}")
+        logger.error(f"硬删除仓库失败: {e}")
         raise HTTPException(status_code=500, detail=f"删除失败: {str(e)}")
 
 

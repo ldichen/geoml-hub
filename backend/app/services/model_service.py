@@ -139,7 +139,6 @@ class ModelServiceManager:
 
         except Exception as e:
             logger.error(f"确保镜像可用失败: {e}")
-            await resource_manager.release_port(db, allocated_port)
             raise RuntimeError(f"确保镜像在控制器上可用失败: {str(e)}")
 
         # 准备容器配置
@@ -150,9 +149,7 @@ class ModelServiceManager:
             "working_dir": "/app",
             "environment": {
                 "GRADIO_SERVER_PORT": str(allocated_port),
-                "EXAMPLE_DATA_PATH": (
-                    "/app/examples" if service_data.example_data else ""
-                ),
+                "EXAMPLES_PATH": "/app/examples",
             },
             "ports": {f"{allocated_port}/tcp": allocated_port},
             "volumes": {},
@@ -175,7 +172,10 @@ class ModelServiceManager:
 
         try:
             # 获取控制器客户端并创建容器
+            logger.info(f"=== Backend 发送容器配置 ===")
             logger.info(f"创建容器: {auto_service_name} 在控制器 {controller_id}")
+            logger.info(f"发送的配置: {container_config}")
+
             controller_client = mmanager_client.get_client(controller_id)
             container_result = await controller_client.create_container(
                 container_config
@@ -190,7 +190,6 @@ class ModelServiceManager:
         except Exception as e:
             logger.error(f"创建容器失败: {e}")
             # 释放已分配的端口
-            await resource_manager.release_port(db, allocated_port)
             raise RuntimeError(f"创建容器失败: {str(e)}")
 
         # 创建服务记录
@@ -220,12 +219,6 @@ class ModelServiceManager:
             health_status=HealthStatus.UNKNOWN,
         )
 
-        # 处理示例数据
-        if service_data.example_data:
-            example_data_path = await self._save_example_data(
-                service_data.example_data, repository_id, auto_service_name
-            )
-            service.example_data_path = example_data_path
 
         db.add(service)
         await db.commit()
@@ -251,7 +244,6 @@ class ModelServiceManager:
         force_restart: bool = False,
     ) -> ServiceResponse:
         """启动模型服务"""
-
         service = await self._get_service_by_id(db, service_id)
 
         # 检查权限
@@ -363,7 +355,10 @@ class ModelServiceManager:
             raise PermissionError("无权限操作此服务")
 
         # 检查当前状态（除非强制停止）
-        if not force_stop and service.status in [ServiceStatus.STOPPED, ServiceStatus.STOPPING]:
+        if not force_stop and service.status in [
+            ServiceStatus.STOPPED,
+            ServiceStatus.STOPPING,
+        ]:
             return ServiceResponse.model_validate(service)
 
         try:
@@ -422,13 +417,8 @@ class ModelServiceManager:
 
             # 删除容器
             if service.container_id:
-                await self._remove_container_via_mmanager(
-                    db, service.container_id
-                )
+                await self._remove_container_via_mmanager(db, service.container_id)
 
-            # 清理示例数据文件
-            if service.example_data_path:
-                await self._cleanup_example_data(service.example_data_path)
 
             # 删除数据库记录（级联删除相关表）
             await db.delete(service)
@@ -545,10 +535,14 @@ class ModelServiceManager:
 
     # 私有方法
     async def _stop_container_via_mmanager(
-        self, db: AsyncSession, container_id: str, timeout: int = 30, force: bool = False
+        self,
+        db: AsyncSession,
+        container_id: str,
+        timeout: int = 30,
+        force: bool = False,
     ):
         """通过mManager停止容器
-        
+
         Args:
             db: 数据库会话
             container_id: 容器ID
@@ -634,7 +628,7 @@ class ModelServiceManager:
                 import time
 
                 start_time = time.time()
-                timeout = aiohttp.ClientTimeout(total=10)
+                timeout = aiohttp.ClientTimeout(total=30)
 
                 async with aiohttp.ClientSession(timeout=timeout) as session:
                     async with session.get(f"{service.service_url}/health") as response:
@@ -796,53 +790,6 @@ class ModelServiceManager:
 
         return "512m"  # 默认值
 
-    async def _save_example_data(
-        self, example_data: str, repository_id: int, service_name: str
-    ) -> str:
-        """保存示例数据"""
-        try:
-            import os
-            import json
-
-            # 创建目录
-            data_dir = f"/data/examples/{repository_id}/{service_name}"
-            os.makedirs(data_dir, exist_ok=True)
-
-            # 保存数据
-            file_path = f"{data_dir}/example_data.json"
-            with open(file_path, "w", encoding="utf-8") as f:
-                json.dump(json.loads(example_data), f, ensure_ascii=False, indent=2)
-
-            logger.info(f"示例数据已保存到: {file_path}")
-            return file_path
-
-        except Exception as e:
-            logger.error(f"保存示例数据失败: {e}")
-            raise RuntimeError(f"保存示例数据失败: {str(e)}")
-
-    async def _cleanup_example_data(self, example_data_path: str):
-        """清理示例数据文件"""
-        try:
-            import os
-            import shutil
-
-            if os.path.exists(example_data_path):
-                # 如果是文件，删除文件和其父目录（如果为空）
-                if os.path.isfile(example_data_path):
-                    os.remove(example_data_path)
-                    parent_dir = os.path.dirname(example_data_path)
-                    try:
-                        os.rmdir(parent_dir)  # 只删除空目录
-                    except OSError:
-                        pass  # 目录不为空，忽略
-                # 如果是目录，删除整个目录
-                elif os.path.isdir(example_data_path):
-                    shutil.rmtree(example_data_path)
-
-                logger.info(f"示例数据已清理: {example_data_path}")
-
-        except Exception as e:
-            logger.warning(f"清理示例数据失败（但继续处理）: {e}")
 
     async def _log_service_event(
         self,

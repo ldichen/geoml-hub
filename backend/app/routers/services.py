@@ -275,7 +275,11 @@ async def list_repository_services(
         raise HTTPException(status_code=500, detail=f"获取服务列表失败: {str(e)}")
 
 
-@router.post("/{username}/{repo_name}", response_model=ServiceResponse, status_code=201)
+@router.post(
+    "/{username}/{repo_name}/create_service_from_image",
+    response_model=ServiceResponse,
+    status_code=201,
+)
 async def create_service_with_image(
     service_data: ServiceCreate,
     repository: Repository = Depends(get_repository_with_permission),
@@ -297,13 +301,13 @@ async def create_service_with_image(
         raise HTTPException(status_code=500, detail=f"创建服务失败: {str(e)}")
 
 
-@router.get("/{service_id}", response_model=ServiceResponse)
+@router.get("/{service_id:int}", response_model=ServiceResponse)
 async def get_service(service: ModelService = Depends(get_service_with_permission)):
     """获取服务详情"""
     return ServiceResponse.model_validate(service)
 
 
-@router.put("/{service_id}", response_model=ServiceResponse)
+@router.put("/{service_id:int}", response_model=ServiceResponse)
 async def update_service(
     service_data: ServiceUpdate,
     service: ModelService = Depends(get_service_with_permission),
@@ -332,7 +336,7 @@ async def update_service(
         raise HTTPException(status_code=500, detail=f"更新服务失败: {str(e)}")
 
 
-@router.delete("/{service_id}", status_code=204)
+@router.delete("/{service_id:int}", status_code=204)
 async def delete_service(
     service: ModelService = Depends(get_service_with_permission),
     current_user: User = Depends(get_current_user),
@@ -354,7 +358,7 @@ async def delete_service(
 
 
 # 服务生命周期控制API
-@router.post("/{service_id}/start", response_model=ServiceResponse)
+@router.post("/{service_id:int}/start", response_model=ServiceResponse)
 async def start_service(
     start_request: ServiceStartRequest,
     service: ModelService = Depends(get_service_with_permission),
@@ -362,7 +366,6 @@ async def start_service(
     db: AsyncSession = Depends(get_async_db),
 ):
     """启动服务"""
-
     # 检查操作权限（服务所有者）
     ServicePermissionManager.check_service_owner_permission(
         service, current_user, "启动服务"
@@ -384,7 +387,7 @@ async def start_service(
         raise HTTPException(status_code=500, detail=f"启动服务失败: {str(e)}")
 
 
-@router.post("/{service_id}/stop", response_model=ServiceResponse)
+@router.post("/{service_id:int}/stop", response_model=ServiceResponse)
 async def stop_service(
     stop_request: ServiceStopRequest,
     service: ModelService = Depends(get_service_with_permission),
@@ -411,7 +414,7 @@ async def stop_service(
         raise HTTPException(status_code=500, detail=f"停止服务失败: {str(e)}")
 
 
-@router.post("/{service_id}/restart", response_model=ServiceResponse)
+@router.post("/{service_id:int}/restart", response_model=ServiceResponse)
 async def restart_service(
     service: ModelService = Depends(get_service_with_permission),
     current_user: User = Depends(get_current_user),
@@ -438,7 +441,7 @@ async def restart_service(
         raise HTTPException(status_code=500, detail=f"重启服务失败: {str(e)}")
 
 
-@router.get("/{service_id}/status", response_model=ServiceStatusResponse)
+@router.get("/{service_id:int}/status", response_model=ServiceStatusResponse)
 async def get_service_status(
     service: ModelService = Depends(get_service_with_permission),
     current_user: Optional[User] = Depends(get_current_user),
@@ -455,7 +458,7 @@ async def get_service_status(
         raise HTTPException(status_code=500, detail=f"获取服务状态失败: {str(e)}")
 
 
-@router.get("/{service_id}/logs", response_model=ServiceLogListResponse)
+@router.get("/{service_id:int}/logs", response_model=ServiceLogListResponse)
 async def get_service_logs(
     service: ModelService = Depends(get_service_with_permission),
     page: int = Query(1, ge=1, description="页码"),
@@ -499,7 +502,7 @@ async def get_service_logs(
 
 
 # 服务访问管理API
-@router.get("/{service_id}/demo")
+@router.get("/{service_id:int}/demo")
 async def access_service_demo(
     service: ModelService = Depends(get_service_with_permission),
     current_user: Optional[User] = Depends(get_current_user),
@@ -541,7 +544,7 @@ async def access_service_demo(
     return RedirectResponse(url=service.service_url)
 
 
-@router.post("/{service_id}/access-token", response_model=ServiceAccessResponse)
+@router.post("/{service_id:int}/access-token", response_model=ServiceAccessResponse)
 async def regenerate_access_token(
     access_request: ServiceAccessRequest,
     service: ModelService = Depends(get_service_with_permission),
@@ -567,7 +570,7 @@ async def regenerate_access_token(
     )
 
 
-@router.put("/{service_id}/visibility", response_model=ServiceResponse)
+@router.put("/{service_id:int}/visibility", response_model=ServiceResponse)
 async def update_service_visibility(
     visibility_data: dict,
     service: ModelService = Depends(get_service_with_permission),
@@ -591,7 +594,7 @@ async def update_service_visibility(
 
 
 # 服务监控API
-@router.get("/{service_id}/health", response_model=ServiceHealthCheckListResponse)
+@router.get("/{service_id:int}/health", response_model=ServiceHealthCheckListResponse)
 async def get_service_health_history(
     service: ModelService = Depends(get_service_with_permission),
     page: int = Query(1, ge=1, description="页码"),
@@ -624,7 +627,7 @@ async def get_service_health_history(
     )
 
 
-@router.post("/{service_id}/health-check")
+@router.post("/{service_id:int}/health-check")
 async def trigger_health_check(
     service: ModelService = Depends(get_service_with_permission),
     db: AsyncSession = Depends(get_async_db),
@@ -640,7 +643,7 @@ async def trigger_health_check(
         raise HTTPException(status_code=500, detail=f"健康检查失败: {str(e)}")
 
 
-@router.get("/{service_id}/metrics")
+@router.get("/{service_id:int}/metrics")
 async def get_service_metrics(
     service: ModelService = Depends(get_service_with_permission),
     current_user: Optional[User] = Depends(get_current_user),
@@ -684,7 +687,7 @@ async def get_service_metrics(
     return metrics
 
 
-@router.get("/{service_id}/resource-usage")
+@router.get("/{service_id:int}/resource-usage")
 async def get_service_resource_usage(
     service: ModelService = Depends(get_service_with_permission),
     db: AsyncSession = Depends(get_async_db),
@@ -991,7 +994,7 @@ async def get_services_health_summary(
 
 
 # 容器文件管理API
-@router.post("/{service_id}/files/update")
+@router.post("/{service_id:int}/files/update")
 async def update_service_files(
     service_id: int,
     current_user: User = Depends(get_current_user_required),
@@ -1071,8 +1074,8 @@ async def create_service_with_docker_tar(
     repo_name: str = Path(..., description="仓库名称"),
     docker_tar: UploadFile = File(..., description="Docker镜像tar包"),
     description: Optional[str] = Form(None, description="服务描述"),
-    cpu_limit: str = Form("0.3", description="CPU限制"),
-    memory_limit: str = Form("256Mi", description="内存限制"),
+    cpu_limit: str = Form("2", description="CPU限制"),
+    memory_limit: str = Form("2Gi", description="内存限制"),
     is_public: bool = Form(False, description="是否公开访问"),
     priority: int = Form(2, ge=0, le=3, description="启动优先级"),
     examples_archive: Optional[UploadFile] = File(
@@ -1124,27 +1127,41 @@ async def create_service_with_docker_tar(
             repository, current_user, "创建服务"
         )
 
-        # 从tar包文件名提取基础名称（用于生成镜像名称，服务名称将自动生成）
-        import os
-
-        base_name = os.path.splitext(os.path.splitext(docker_tar.filename)[0])[0]
-        base_name = base_name.replace(".", "-").replace("_", "-").lower()
-
-        # 确保基础名称符合要求
-        if len(base_name) > 30:
-            base_name = base_name[:30]
-        if not base_name or not base_name.replace("-", "").isalnum():
-            base_name = f"service-{current_user.id}-{int(time.time())}"
-
         # 1. 上传Docker tar包到Harbor镜像仓库
         logger.info(f"开始上传Docker tar包到Harbor: {docker_tar.filename}")
 
         from app.services.harbor_client import HarborClient
         from app.models.image import Image
+        import time
 
-        # 镜像基本信息
-        image_name = base_name
-        image_tag = "latest"
+        # 从文件名提取镜像名称和tag：最后一个-后面的内容作为tag
+        filename_without_ext = docker_tar.filename
+        if filename_without_ext.endswith(".tar"):
+            filename_without_ext = filename_without_ext[:-4]
+
+        # 分割文件名，获取tag
+        parts = filename_without_ext.split("-")
+        if len(parts) > 1:
+            # 最后一部分作为tag
+            image_tag = parts[-1]
+            # 其余部分作为image_name
+            raw_image_name = "-".join(parts[:-1])
+            logger.info(f"从文件名提取到: {raw_image_name}:{image_tag}")
+        else:
+            # 如果没有-分隔符，使用整个文件名作为image_name，tag为latest
+            raw_image_name = filename_without_ext
+            image_tag = "latest"
+            logger.info(f"文件名无分隔符，使用默认: {raw_image_name}:{image_tag}")
+
+        # 清理和验证镜像名称
+        image_name = raw_image_name.replace(".", "-").replace("_", "-").lower()
+
+        # 确保镜像名称符合要求
+        if len(image_name) > 30:
+            image_name = image_name[:30]
+        if not image_name or not image_name.replace("-", "").isalnum():
+            image_name = f"service-{current_user.id}-{int(time.time())}"
+
         harbor_project = settings.harbor_default_project
 
         # 确保owner被正确加载
@@ -1215,7 +1232,7 @@ async def create_service_with_docker_tar(
                     image.status = "ready"
                 await db.commit()
                 logger.info(
-                    f"镜像{image.original_name}-{image.id} 上传进度: {percent}% ({stage})"
+                    f"镜像{image.original_name}-{image.id}:{image.original_tag} 上传进度: {percent}% ({stage})"
                 )
 
             async with HarborClient() as harbor:
@@ -1225,7 +1242,7 @@ async def create_service_with_docker_tar(
                 result = await harbor.push_image_from_tar(
                     project_name=harbor_project,
                     repository_name=image.harbor_repository_path,  # 使用新的简化路径
-                    tag="latest",  # 统一使用latest标签
+                    tag=image_tag,  # 使用解析出的实际标签
                     tar_file=docker_tar.file,
                     progress_callback=progress_callback,
                 )
@@ -1308,7 +1325,7 @@ async def create_service_with_docker_tar(
         raise HTTPException(status_code=500, detail=f"服务创建失败: {str(e)}")
 
 
-@router.get("/{service_id}/container-info")
+@router.get("/{service_id:int}/container-info")
 async def get_service_container_info(
     service: ModelService = Depends(get_service_with_permission),
     current_user: Optional[User] = Depends(get_current_user),
@@ -1334,7 +1351,7 @@ async def get_service_container_info(
         raise HTTPException(status_code=500, detail=f"获取容器信息失败: {str(e)}")
 
 
-@router.post("/{service_id}/validate-environment")
+@router.post("/{service_id:int}/validate-environment")
 async def validate_service_environment(
     service_id: int,
     current_user: User = Depends(get_current_user_required),

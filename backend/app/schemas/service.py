@@ -9,22 +9,22 @@
 
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from enum import Enum
 
 
 class ServiceStatus(str, Enum):
     """服务状态枚举"""
 
-    CREATED = "created"        # 服务刚创建，容器已创建但未启动
-    STARTING = "starting"      # 容器正在启动中
-    RUNNING = "running"        # 容器运行中且健康
-    STOPPING = "stopping"      # 容器正在停止中
-    STOPPED = "stopped"        # 容器已停止
-    ERROR = "error"           # 容器或服务出现错误
-    IDLE = "idle"             # 容器运行但长时间无访问
-    RESTARTING = "restarting" # 容器正在重启中
-    FAILED = "failed"         # 容器启动失败或崩溃
+    CREATED = "created"  # 服务刚创建，容器已创建但未启动
+    STARTING = "starting"  # 容器正在启动中
+    RUNNING = "running"  # 容器运行中且健康
+    STOPPING = "stopping"  # 容器正在停止中
+    STOPPED = "stopped"  # 容器已停止
+    ERROR = "error"  # 容器或服务出现错误
+    IDLE = "idle"  # 容器运行但长时间无访问
+    RESTARTING = "restarting"  # 容器正在重启中
+    FAILED = "failed"  # 容器启动失败或崩溃
 
 
 class HealthStatus(str, Enum):
@@ -67,11 +67,11 @@ class ServiceBase(BaseModel):
     )
     description: Optional[str] = Field(None, description="服务描述")
     cpu_limit: str = Field("0.3", description="CPU限制")
-    memory_limit: str = Field("256Mi", description="内存限制")
+    memory_limit: str = Field("2Gi", description="内存限制")
     is_public: bool = Field(False, description="是否公开访问")
     priority: int = Field(2, ge=0, le=3, description="启动优先级，数值越小优先级越高")
 
-    @validator("service_name")
+    @field_validator("service_name")
     def validate_service_name(cls, v):
         if not v.replace("_", "").replace("-", "").isalnum():
             raise ValueError("服务名称只能包含字母、数字、下划线和连字符")
@@ -85,20 +85,17 @@ class ServiceCreate(BaseModel):
     # image_id 是必需的，前端必须选择一个镜像
     image_id: int = Field(..., description="关联的镜像ID")
     description: Optional[str] = Field(None, description="服务描述")
-    cpu_limit: str = Field("0.3", description="CPU限制")
-    memory_limit: str = Field("256Mi", description="内存限制")
+    cpu_limit: str = Field("2", description="CPU限制")
+    memory_limit: str = Field("2Gi", description="内存限制")
     is_public: bool = Field(False, description="是否公开访问")
     priority: int = Field(2, ge=0, le=3, description="启动优先级，数值越小优先级越高")
-    example_data: Optional[str] = Field(
-        None, description="示例数据（base64编码或文件路径）"
-    )
 
     # model_ip 在后端自动设置，前端不需要传递
     model_ip: str = Field(
         "172.21.252.206", exclude=True, description="模型服务器IP地址"
     )
 
-    @validator("image_id")
+    @field_validator("image_id")
     def validate_image_id(cls, v):
         if v <= 0:
             raise ValueError("镜像ID必须是正整数")
@@ -109,11 +106,10 @@ class ServiceCreate(BaseModel):
             "example": {
                 "image_id": 123,
                 "description": "地理数据分类模型服务",
-                "cpu_limit": "0.3",
-                "memory_limit": "256Mi",
+                "cpu_limit": "2",
+                "memory_limit": "2Gi",
                 "is_public": True,
                 "priority": 2,
-                "example_data": "base64:encoded_data_here",
             }
         }
 

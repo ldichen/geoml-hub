@@ -44,7 +44,6 @@ class ModelService(Base):
     memory_limit = Column(String(50), default="512Mi", comment="内存限制")
     
     # 服务配置
-    example_data_path = Column(String(1000), comment="示例数据路径")
     is_public = Column(Boolean, default=False, comment="是否公开访问")
     access_token = Column(String(255), comment="访问令牌")
     priority = Column(Integer, default=100, comment="启动优先级，数值越小优先级越高")

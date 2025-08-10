@@ -14,9 +14,9 @@
   let formElement;
   // 资源配置预设
   const resourceConfigs = {
-    'lightweight': { cpu: '0.1', memory: '128Mi', label: '轻量配置', icon: 'eco', color: 'green' },
-    'recommended': { cpu: '0.3', memory: '256Mi', label: '推荐配置', icon: 'zap', color: 'blue' },
-    'performance': { cpu: '0.5', memory: '512Mi', label: '性能配置', icon: 'rocket', color: 'purple' }
+    'lightweight': { cpu: '1', memory: '1Gi', label: '轻量配置', icon: 'eco', color: 'green' },
+    'recommended': { cpu: '2', memory: '2Gi', label: '推荐配置', icon: 'zap', color: 'blue' },
+    'performance': { cpu: '4', memory: '4Gi', label: '性能配置', icon: 'rocket', color: 'purple' }
   };
 
   // 优先级选项
@@ -29,8 +29,8 @@
   let formData = {
     description: '',
     resource_config: 'recommended', // 资源配置预设选择
-    cpu_limit: '0.3',
-    memory_limit: '256Mi',
+    cpu_limit: '2',
+    memory_limit: '2Gi',
     is_public: false,
     priority: 2,
     selected_image_id: null // 当选择已有镜像时使用
@@ -42,6 +42,10 @@
   let fileInputRef;
 
   let errors = {};
+  
+  // Drag and drop states
+  let isDragOverDocker = false;
+  let isDragOverExamples = false;
 
   function handleClose() {
     if (loading) return;
@@ -53,8 +57,8 @@
     formData = {
       description: '',
       resource_config: 'recommended',
-      cpu_limit: '0.3',
-      memory_limit: '256Mi',
+      cpu_limit: '2',
+      memory_limit: '2Gi',
       is_public: false,
       priority: 2,
       selected_image_id: null
@@ -153,18 +157,18 @@
 
   // CPU limit presets
   const cpuPresets = [
-    { value: '0.1', label: '0.1 cores (轻量)' },
-    { value: '0.2', label: '0.2 cores (推荐)' },
-    { value: '0.5', label: '0.5 cores' },
-    { value: '1.0', label: '1.0 cores' }
+    { value: '1', label: '1 cores (轻量)' },
+    { value: '2', label: '2 cores (推荐)' },
+    { value: '4', label: '4 cores' },
+    { value: '8', label: '8 cores' }
   ];
 
   // Memory limit presets
   const memoryPresets = [
-    { value: '128Mi', label: '128Mi (最小)' },
-    { value: '256Mi', label: '256Mi (推荐)' },
-    { value: '512Mi', label: '512Mi' },
-    { value: '1Gi', label: '1Gi' }
+    { value: '1Gi', label: '1Gi (最小)' },
+    { value: '2Gi', label: '2Gi (推荐)' },
+    { value: '4Gi', label: '4Gi' },
+    { value: '8Gi', label: '8Gi' }
   ];
 
   // 处理Docker tar文件选择
@@ -178,9 +182,9 @@
     }
     
     // 验证文件大小 (最大2GB)
-    const maxSize = 2 * 1024 * 1024 * 1024;
+    const maxSize = 20 * 1024 * 1024 * 1024;
     if (file.size > maxSize) {
-      alert('Docker镜像tar包大小不能超过2GB');
+      alert('Docker镜像tar包大小不能超过20GB');
       input.value = '';
       dockerTarFile = null;
       return;
@@ -255,6 +259,114 @@
     const sizes = ['B', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
+  // Drag and drop handlers for Docker tar file
+  function handleDockerDragEnter(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    isDragOverDocker = true;
+  }
+
+  function handleDockerDragLeave(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX;
+    const y = e.clientY;
+    
+    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+      isDragOverDocker = false;
+    }
+  }
+
+  function handleDockerDragOver(e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  function handleDockerDrop(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    isDragOverDocker = false;
+    
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+      const file = files[0];
+      
+      // Validate file size (max 2GB)
+      const maxSize = 20 * 1024 * 1024 * 1024;
+      if (file.size > maxSize) {
+        alert('Docker镜像tar包大小不能超过20GB');
+        return;
+      }
+      
+      // Validate file format
+      const allowedExtensions = ['.tar', '.tar.gz', '.tgz'];
+      const fileName = file.name.toLowerCase();
+      const isValidFormat = allowedExtensions.some(ext => fileName.endsWith(ext));
+      
+      if (!isValidFormat) {
+        alert('Docker镜像必须是tar包格式 (tar, tar.gz, tgz)');
+        return;
+      }
+      
+      dockerTarFile = file;
+    }
+  }
+
+  // Drag and drop handlers for examples file
+  function handleExamplesDragEnter(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    isDragOverExamples = true;
+  }
+
+  function handleExamplesDragLeave(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX;
+    const y = e.clientY;
+    
+    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+      isDragOverExamples = false;
+    }
+  }
+
+  function handleExamplesDragOver(e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  function handleExamplesDrop(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    isDragOverExamples = false;
+    
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+      const file = files[0];
+      
+      // Validate file size (max 100MB)
+      const maxSize = 100 * 1024 * 1024;
+      if (file.size > maxSize) {
+        alert('示例数据文件大小不能超过100MB');
+        return;
+      }
+      
+      // Validate file format
+      const allowedExtensions = ['.zip', '.tar', '.tar.gz', '.tgz'];
+      const fileName = file.name.toLowerCase();
+      const isValidFormat = allowedExtensions.some(ext => fileName.endsWith(ext));
+      
+      if (!isValidFormat) {
+        alert('示例数据必须是压缩包格式 (zip, tar, tar.gz)');
+        return;
+      }
+      
+      examplesFile = file;
+    }
   }
 </script>
 
@@ -382,7 +494,7 @@
               <div class="space-y-3">
                 
                 {#if availableImages.length > 0}
-                  <div class="grid gap-3">
+                  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {#each availableImages as image (image.id)}
                       <label class="relative">
                         <input
@@ -393,23 +505,30 @@
                           class="sr-only"
                           disabled={loading || image.status !== 'ready'}
                         />
-                        <div class="flex items-center p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 hover:shadow-md {formData.selected_image_id === image.id ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'} {image.status !== 'ready' ? 'opacity-50 cursor-not-allowed' : ''}">
-                          <div class="flex-1">
-                            <div class="flex items-center justify-between mb-2">
-                              <span class="font-medium text-sm text-gray-900 dark:text-white">{image.name}:{image.tag}</span>
-                              <span class="text-xs px-2 py-1 rounded-full {image.status === 'ready' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}">
-                                {image.status === 'ready' ? '就绪' : image.status === 'uploading' ? '上传中' : '不可用'}
-                              </span>
+                        <div class="flex flex-col p-3 border-2 rounded-lg cursor-pointer transition-all duration-200 hover:shadow-md {formData.selected_image_id === image.id ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'} {image.status !== 'ready' ? 'opacity-50 cursor-not-allowed' : ''} min-h-[120px]">
+                          <div class="flex items-center justify-between mb-2">
+                            <div class="flex-shrink-0 w-8 h-8 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center">
+                              <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                              </svg>
                             </div>
+                            <span class="text-xs px-2 py-1 rounded-full {image.status === 'ready' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'}">
+                              {image.status === 'ready' ? '就绪' : image.status === 'uploading' ? '上传中' : '不可用'}
+                            </span>
+                          </div>
+                          <div class="flex-1">
+                            <h4 class="font-medium text-sm text-gray-900 dark:text-white mb-1 truncate">{image.name}:{image.tag}</h4>
                             {#if image.description}
-                              <p class="text-xs text-gray-600 dark:text-gray-400 mb-2">{image.description}</p>
+                              <p class="text-xs text-gray-600 dark:text-gray-400 mb-2 line-clamp-2">{image.description}</p>
                             {/if}
-                            <div class="flex items-center space-x-4 text-xs text-gray-500">
-                              <span>服务数: {image.service_count || 0}/2</span>
+                            <div class="flex flex-col space-y-1 text-xs text-gray-500 dark:text-gray-400">
+                              <div class="flex items-center justify-between">
+                                <span>服务: {image.service_count || 0}/2</span>
+                                <span>ID: {image.id}</span>
+                              </div>
                               {#if image.harbor_size}
                                 <span>大小: {Math.round(image.harbor_size / 1024 / 1024)}MB</span>
                               {/if}
-                              <span>ID: {image.id}</span>
                             </div>
                           </div>
                         </div>
@@ -474,8 +593,15 @@
                     </div>
                   </div>
                 {:else}
-                  <!-- Docker镜像tar包选择器 -->
-                  <div class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-8 text-center hover:border-gray-400 dark:hover:border-gray-500 transition-colors {errors.docker_tar ? 'border-red-500' : ''}">
+                  <!-- Docker镜像tar包选择器 with drag-and-drop -->
+                  <div 
+                    class="border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer {isDragOverDocker ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20' : errors.docker_tar ? 'border-red-500' : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'}"
+                    on:click={() => dockerFileInputRef?.click()}
+                    on:dragenter={handleDockerDragEnter}
+                    on:dragleave={handleDockerDragLeave}
+                    on:dragover={handleDockerDragOver}
+                    on:drop={handleDockerDrop}
+                  >
                     <input
                       type="file"
                       accept=".tar,.tar.gz,.tgz"
@@ -494,10 +620,10 @@
                         class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium text-base"
                         disabled={loading}
                       >
-                        点击选择Docker镜像tar包
+                        {isDragOverDocker ? '释放文件到此处' : '点击选择或拖拽Docker镜像tar包'}
                       </button>
                       <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">支持 TAR, TAR.GZ, TGZ 格式</p>
-                      <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">最大文件大小: 2GB</p>
+                      <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">最大文件大小: 20GB</p>
                     </div>
                   </div>
                   {#if errors.docker_tar}
@@ -558,8 +684,15 @@
                     </div>
                   </div>
                 {:else}
-                  <!-- 文件选择器 -->
-                  <div class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center hover:border-gray-400 dark:hover:border-gray-500 transition-colors">
+                  <!-- 文件选择器 with drag-and-drop -->
+                  <div 
+                    class="border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer {isDragOverExamples ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'}"
+                    on:click={() => fileInputRef?.click()}
+                    on:dragenter={handleExamplesDragEnter}
+                    on:dragleave={handleExamplesDragLeave}
+                    on:dragover={handleExamplesDragOver}
+                    on:drop={handleExamplesDrop}
+                  >
                     <input
                       type="file"
                       accept=".zip,.tar,.tar.gz,.tgz"
@@ -578,7 +711,7 @@
                         class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium text-sm"
                         disabled={loading}
                       >
-                        点击选择示例数据压缩包
+                        {isDragOverExamples ? '释放文件到此处' : '点击选择或拖拽示例数据压缩包'}
                       </button>
                       <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">支持 ZIP, TAR, TAR.GZ 格式，最大100MB</p>
                       <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">可以在服务创建后通过文件更新功能添加</p>
@@ -826,5 +959,14 @@
 
   .dark .overflow-y-auto::-webkit-scrollbar-thumb:hover {
     background: rgba(75, 85, 99, 0.7);
+  }
+
+  /* Line clamp utility for truncating text */
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 </style>

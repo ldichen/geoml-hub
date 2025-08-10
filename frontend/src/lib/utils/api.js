@@ -430,7 +430,7 @@ class ApiClient {
 	}
 
 	async createService(owner, name, data) {
-		return this.request(`/api/services/${owner}/${name}`, {
+		return this.request(`/api/services/${owner}/${name}/create_service_from_image`, {
 			method: 'POST',
 			body: data
 		});

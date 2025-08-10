@@ -9,7 +9,7 @@ import sys
 import subprocess
 import json
 import psutil
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -82,7 +82,7 @@ async def health_check():
     return {
         "status": "healthy",
         "server_type": MMANAGER_SERVER_TYPE,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "containers": {
             "running": len(
                 [c for c in containers.values() if c["status"] == "running"]
@@ -131,7 +131,7 @@ async def create_container(config: ContainerConfig, request: Request):
         "name": container_name,
         "image": config.image,
         "status": "created",
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
         "ports": config.ports or {},
         "environment": config.environment or {},
         "command": config.command,
@@ -160,7 +160,7 @@ async def start_container(container_id: str, request: Request):
 
     # 更新状态
     container["status"] = "running"
-    container["started_at"] = datetime.utcnow().isoformat()
+    container["started_at"] = datetime.now(timezone.utc).isoformat()
 
     return {
         "container_id": container_id,
@@ -182,7 +182,7 @@ async def stop_container(container_id: str, request: Request, timeout: int = 10)
 
     # 更新状态
     container["status"] = "stopped"
-    container["stopped_at"] = datetime.utcnow().isoformat()
+    container["stopped_at"] = datetime.now(timezone.utc).isoformat()
 
     return {
         "container_id": container_id,
@@ -252,9 +252,9 @@ async def get_container_logs(container_id: str, request: Request, lines: int = 1
     # 模拟日志
     container = containers[container_id]
     logs = [
-        f"[{datetime.utcnow().isoformat()}] Container {container['name']} started",
-        f"[{datetime.utcnow().isoformat()}] Service initializing...",
-        f"[{datetime.utcnow().isoformat()}] Service ready on port 7860",
+        f"[{datetime.now(timezone.utc).isoformat()}] Container {container['name']} started",
+        f"[{datetime.now(timezone.utc).isoformat()}] Service initializing...",
+        f"[{datetime.now(timezone.utc).isoformat()}] Service ready on port 7860",
     ]
 
     return {"container_id": container_id, "logs": logs[-lines:], "lines": len(logs)}

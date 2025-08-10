@@ -1,6 +1,6 @@
 <script>
   import { createEventDispatcher } from 'svelte';
-  import { Plus, Filter, MoreHorizontal, Play, Square, Trash2 } from 'lucide-svelte';
+  import { Plus, MoreHorizontal, Play, Square, Trash2 } from 'lucide-svelte';
   import ServiceCard from './ServiceCard.svelte';
   import Loading from '../Loading.svelte';
 
@@ -13,14 +13,9 @@
   const dispatch = createEventDispatcher();
 
   let selectedServices = new Set();
-  let filterStatus = '';
-  let showFilterMenu = false;
 
-  // Filter services based on status
-  $: filteredServices = filterStatus ? services.filter(s => s.status === filterStatus) : services;
-  
-  // Get unique statuses for filter dropdown
-  $: uniqueStatuses = [...new Set(services.map(s => s.status))];
+  // Use all services since we removed filtering
+  $: filteredServices = services;
 
   // Check if all services are selected
   $: allSelected = filteredServices.length > 0 && selectedServices.size === filteredServices.length;
@@ -75,16 +70,6 @@
     selectedServices = selectedServices;
   }
 
-  function clearFilter() {
-    filterStatus = '';
-    showFilterMenu = false;
-  }
-
-  function applyFilter(status) {
-    filterStatus = status;
-    showFilterMenu = false;
-  }
-
   // Get service status display text
   function getServiceStatusText(status) {
     switch (status) {
@@ -122,37 +107,6 @@
         Model Services ({services.length})
       </h2>
       
-      <!-- Filter Dropdown -->
-      <div class="relative">
-        <button
-          class="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-          on:click={() => showFilterMenu = !showFilterMenu}
-        >
-          <Filter class="w-4 h-4" />
-          <span>{filterStatus ? getServiceStatusText(filterStatus) : '全部状态'}</span>
-        </button>
-        
-        {#if showFilterMenu}
-          <div class="absolute left-0 top-full mt-1 w-48 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg z-10">
-            <div class="p-1">
-              <button
-                class="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-                on:click={clearFilter}
-              >
-                全部状态
-              </button>
-              {#each uniqueStatuses as status}
-                <button
-                  class="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-                  on:click={() => applyFilter(status)}
-                >
-                  {getServiceStatusText(status)}
-                </button>
-              {/each}
-            </div>
-          </div>
-        {/if}
-      </div>
     </div>
 
     <div class="flex items-center space-x-3">
@@ -240,35 +194,13 @@
         </svg>
       </div>
       
-      {#if filterStatus}
-        <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
-          没有找到状态为"{getServiceStatusText(filterStatus)}"的服务
-        </h3>
-        <p class="text-gray-500 dark:text-gray-400 mb-4">
-          尝试清除筛选条件或查看其他状态的服务
-        </p>
-        <button
-          class="px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg transition-colors"
-          on:click={clearFilter}
-        >
-          清除筛选
-        </button>
-      {:else if services.length === 0}
+      {#if services.length === 0}
         <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
           还没有模型服务
         </h3>
         <p class="text-gray-500 dark:text-gray-400 mb-4">
           创建您的第一个模型服务来部署和分享您的模型
         </p>
-        {#if showCreateButton && isOwner}
-          <button
-            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center space-x-2 mx-auto"
-            on:click={handleCreateService}
-          >
-            <Plus class="w-4 h-4" />
-            <span>创建服务</span>
-          </button>
-        {/if}
       {/if}
     </div>
   {:else}
@@ -305,10 +237,3 @@
   {/if}
 </div>
 
-<!-- Click outside to close filter menu -->
-{#if showFilterMenu}
-  <div
-    class="fixed inset-0 z-0"
-    on:click={() => showFilterMenu = false}
-  ></div>
-{/if}
