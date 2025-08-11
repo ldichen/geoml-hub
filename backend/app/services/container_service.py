@@ -23,6 +23,7 @@ from sqlalchemy import select
 from app.models.service import ModelService
 from app.schemas.service import ServiceStatus, HealthStatus
 from app.services.model_service import service_manager
+from app.services.mmanager_client import mmanager_client
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +44,7 @@ class ContainerFileUpdateService:
         user_id: int
     ) -> Dict[str, Any]:
         """
-        更新服务文件
+        更新服务文件 - 优化版：分离数据库操作和长时间文件操作
         
         Args:
             db: 数据库会话
@@ -54,19 +55,70 @@ class ContainerFileUpdateService:
         Returns:
             更新结果字典
         """
-        # 获取服务信息
-        service = await self._get_service_by_id(db, service_id)
-        
-        # 检查权限
-        if service.user_id != user_id:
-            raise PermissionError("无权限操作此服务")
+        try:
+            # 第一阶段：快速获取必要信息，然后释放数据库连接压力
+            service_info = await self._get_service_info_for_update(db, service_id, user_id)
             
-        # 检查容器是否存在
-        if not service.container_id:
-            raise ValueError("服务容器不存在，无法更新文件")
+            # 第二阶段：执行长时间的文件操作（不持有数据库连接）
+            update_results = await self._perform_file_operations(service_info, file_updates)
             
+            # 第三阶段：如果需要重启，重新获取数据库会话进行容器重启
+            container_needs_restart = any(r.get('success') for r in update_results.values())
+            if container_needs_restart:
+                restart_result = await self._restart_container_with_fresh_session(
+                    service_id, user_id
+                )
+                update_results['container_restart'] = restart_result
+                
+            return {
+                'service_id': service_id,
+                'updates': update_results,
+                'container_restarted': container_needs_restart,
+                'overall_success': all(r.get('success', False) for r in update_results.values())
+            }
+            
+        except Exception as e:
+            logger.error(f"更新服务 {service_id} 文件失败: {e}")
+            raise RuntimeError(f"文件更新失败: {str(e)}")
+
+    async def _get_service_info_for_update(
+        self, db: AsyncSession, service_id: int, user_id: int
+    ) -> Dict[str, Any]:
+        """获取文件更新所需的服务信息"""
+        try:
+            service = await self._get_service_by_id(db, service_id)
+            
+            # 检查权限
+            if service.user_id != user_id:
+                raise PermissionError("无权限操作此服务")
+                
+            # 检查容器是否存在
+            if not service.container_id:
+                raise ValueError("服务容器不存在，无法更新文件")
+            
+            # 获取容器位置信息
+            location = await mmanager_client.find_container_location(db, service.container_id)
+            if not location:
+                raise ValueError(f"无法找到容器 {service.container_id} 的位置")
+            
+            # 返回后续操作需要的最小信息集
+            return {
+                'service_id': service.id,
+                'container_id': service.container_id,
+                'controller_id': location["controller_id"],
+                'user_id': user_id,
+                'status': service.status
+            }
+            
+        except Exception as e:
+            logger.error(f"获取服务信息失败: {e}")
+            raise
+
+    async def _perform_file_operations(
+        self, service_info: Dict[str, Any], file_updates: Dict[str, UploadFile]
+    ) -> Dict[str, Any]:
+        """执行文件操作 - 不需要数据库连接"""
         update_results = {}
-        container_needs_restart = False
         
         try:
             # 创建临时工作目录
@@ -76,16 +128,14 @@ class ContainerFileUpdateService:
                     try:
                         if file_type in ['gogogo', 'mc_config']:
                             # 处理单文件更新
-                            result = await self._handle_single_file_update(
-                                service, file_obj, file_type, work_dir
+                            result = await self._handle_single_file_update_no_db(
+                                service_info, file_obj, file_type, work_dir
                             )
-                            container_needs_restart = True
                         elif file_type in ['model', 'examples']:
                             # 处理目录压缩包更新
-                            result = await self._handle_directory_update(
-                                service, file_obj, file_type, work_dir
+                            result = await self._handle_directory_update_no_db(
+                                service_info, file_obj, file_type, work_dir
                             )
-                            container_needs_restart = True
                         else:
                             result = {
                                 'success': False,
@@ -101,24 +151,202 @@ class ContainerFileUpdateService:
                             'error': str(e)
                         }
                         
-            # 如果有成功的更新，重启容器
-            if container_needs_restart and any(r.get('success') for r in update_results.values()):
-                restart_result = await self._restart_container_and_verify(db, service, user_id)
-                update_results['container_restart'] = restart_result
+            return update_results
+            
+        except Exception as e:
+            logger.error(f"执行文件操作失败: {e}")
+            raise
+
+    async def _handle_single_file_update_no_db(
+        self,
+        service_info: Dict[str, Any],
+        file_obj: UploadFile,
+        file_type: str,
+        work_dir: str
+    ) -> Dict[str, Any]:
+        """处理单文件更新 - 无数据库依赖版本"""
+        
+        # 文件类型映射
+        file_mapping = {
+            'gogogo': 'gogogo.py',
+            'mc_config': 'mc.json'
+        }
+        
+        if file_type not in file_mapping:
+            raise ValueError(f"不支持的文件类型: {file_type}")
+            
+        target_filename = file_mapping[file_type]
+        
+        try:
+            # 读取文件内容
+            content = await file_obj.read()
+            
+            # 验证文件内容
+            if file_type == 'gogogo':
+                await self._validate_python_file(content)
+            elif file_type == 'mc_config':
+                await self._validate_json_file(content)
                 
+            # 复制文件到容器
+            temp_file_path = os.path.join(work_dir, target_filename)
+            with open(temp_file_path, 'wb') as f:
+                f.write(content)
+                
+            # 复制到容器内
+            await self._copy_file_to_container_no_db(
+                service_info,
+                temp_file_path,
+                f"{self.container_base_path}/{target_filename}"
+            )
+            
+            logger.info(f"成功更新服务 {service_info['service_id']} 的文件 {target_filename}")
             return {
-                'service_id': service_id,
-                'updates': update_results,
-                'container_restarted': container_needs_restart,
-                'overall_success': all(r.get('success', False) for r in update_results.values())
+                'success': True,
+                'file_name': target_filename,
+                'file_size': len(content)
             }
             
         except Exception as e:
-            logger.error(f"更新服务 {service_id} 文件失败: {e}")
-            raise RuntimeError(f"文件更新失败: {str(e)}")
+            logger.error(f"更新文件 {file_type} 失败: {e}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
+
+    async def _handle_directory_update_no_db(
+        self,
+        service_info: Dict[str, Any],
+        file_obj: UploadFile,
+        dir_type: str,
+        work_dir: str
+    ) -> Dict[str, Any]:
+        """处理目录压缩包更新 - 无数据库依赖版本"""
+        
+        if dir_type not in ['model', 'examples']:
+            raise ValueError(f"不支持的目录类型: {dir_type}")
+            
+        try:
+            # 创建临时解压目录
+            extract_dir = os.path.join(work_dir, f"extract_{dir_type}")
+            os.makedirs(extract_dir, exist_ok=True)
+            
+            # 保存上传的压缩包
+            archive_path = os.path.join(work_dir, file_obj.filename)
+            content = await file_obj.read()
+            with open(archive_path, 'wb') as f:
+                f.write(content)
+                
+            # 解压文件
+            await self._extract_archive(archive_path, extract_dir)
+            
+            # 查找实际内容目录（处理嵌套问题）
+            actual_content_dir = await self._find_actual_content_dir(extract_dir, dir_type)
+            
+            # 验证目录内容
+            if dir_type == 'model':
+                await self._validate_model_directory(actual_content_dir)
+            elif dir_type == 'examples':
+                await self._validate_examples_directory(actual_content_dir)
+                
+            # 复制目录到容器
+            container_target_path = f"{self.container_base_path}/{dir_type}"
+            await self._copy_directory_to_container_no_db(
+                service_info,
+                actual_content_dir,
+                container_target_path
+            )
+            
+            # 统计文件数量
+            file_count = sum(len(files) for _, _, files in os.walk(actual_content_dir))
+            
+            logger.info(f"成功更新服务 {service_info['service_id']} 的目录 {dir_type}，包含 {file_count} 个文件")
+            return {
+                'success': True,
+                'directory_name': dir_type,
+                'file_count': file_count,
+                'archive_size': len(content)
+            }
+            
+        except Exception as e:
+            logger.error(f"更新目录 {dir_type} 失败: {e}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
+
+    async def _copy_file_to_container_no_db(
+        self, service_info: Dict[str, Any], host_path: str, container_path: str
+    ):
+        """复制文件到容器 - 无数据库依赖版本"""
+        
+        try:
+            import base64
+            
+            # 读取文件内容并编码为base64
+            with open(host_path, 'rb') as f:
+                file_content = f.read()
+            content_base64 = base64.b64encode(file_content).decode('utf-8')
+            file_name = os.path.basename(container_path)
+            
+            # 使用mManager客户端复制文件
+            controller_client = mmanager_client.get_client(service_info["controller_id"])
+            result = await controller_client.copy_file_to_container(
+                service_info["container_id"], container_path, content_base64, file_name
+            )
+            
+            if not result.get("success", False):
+                raise RuntimeError(f"文件复制失败: {result.get('message', '未知错误')}")
+                
+        except Exception as e:
+            raise RuntimeError(f"复制文件到容器失败: {str(e)}")
+
+    async def _copy_directory_to_container_no_db(
+        self, service_info: Dict[str, Any], host_dir: str, container_path: str
+    ):
+        """复制目录到容器 - 无数据库依赖版本"""
+        
+        try:
+            import base64
+            
+            # 创建tar包并编码为base64
+            tar_data = self._create_directory_tar_archive(host_dir)
+            archive_base64 = base64.b64encode(tar_data).decode('utf-8')
+            
+            # 使用mManager客户端复制目录
+            controller_client = mmanager_client.get_client(service_info["controller_id"])
+            result = await controller_client.copy_directory_to_container(
+                service_info["container_id"], container_path, archive_base64, remove_existing=True
+            )
+            
+            if not result.get("success", False):
+                raise RuntimeError(f"目录复制失败: {result.get('message', '未知错误')}")
+                
+        except Exception as e:
+            raise RuntimeError(f"复制目录到容器失败: {str(e)}")
+
+    async def _restart_container_with_fresh_session(
+        self, service_id: int, user_id: int
+    ) -> Dict[str, Any]:
+        """使用新的数据库会话重启容器"""
+        from app.database import get_db
+        
+        try:
+            # 获取新的数据库会话
+            async with get_db() as fresh_db:
+                service = await self._get_service_by_id(fresh_db, service_id)
+                result = await self._restart_container_and_verify(fresh_db, service, user_id)
+                await fresh_db.commit()  # 显式提交
+                return result
+        except Exception as e:
+            logger.error(f"重启容器失败: {e}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
             
     async def _handle_single_file_update(
         self,
+        db: AsyncSession,
         service: ModelService,
         file_obj: UploadFile,
         file_type: str,
@@ -154,6 +382,7 @@ class ContainerFileUpdateService:
                 
             # 复制到容器内
             await self._copy_file_to_container(
+                db,
                 service.container_id,
                 temp_file_path,
                 f"{self.container_base_path}/{target_filename}"
@@ -175,6 +404,7 @@ class ContainerFileUpdateService:
             
     async def _handle_directory_update(
         self,
+        db: AsyncSession,
         service: ModelService,
         file_obj: UploadFile,
         dir_type: str,
@@ -211,6 +441,7 @@ class ContainerFileUpdateService:
             # 复制目录到容器
             container_target_path = f"{self.container_base_path}/{dir_type}"
             await self._copy_directory_to_container(
+                db,
                 service.container_id,
                 actual_content_dir,
                 container_target_path
@@ -324,44 +555,59 @@ class ContainerFileUpdateService:
         if not data_files:
             raise ValueError("示例数据目录为空")
             
-    async def _copy_file_to_container(self, container_id: str, host_path: str, container_path: str):
+    async def _copy_file_to_container(self, db: AsyncSession, container_id: str, host_path: str, container_path: str):
         """复制文件到容器"""
         
-        if not self.service_manager.docker_client:
-            raise RuntimeError("Docker客户端未初始化")
-            
         try:
-            container = self.service_manager.docker_client.containers.get(container_id)
+            import base64
             
-            # 创建tar包并复制到容器
+            # 读取文件内容并编码为base64
             with open(host_path, 'rb') as f:
-                container.put_archive(
-                    os.path.dirname(container_path),
-                    self._create_tar_archive(os.path.basename(container_path), f.read())
-                )
+                file_content = f.read()
+            content_base64 = base64.b64encode(file_content).decode('utf-8')
+            file_name = os.path.basename(container_path)
+            
+            # 找到容器所在的控制器
+            location = await mmanager_client.find_container_location(db, container_id)
+            if not location:
+                raise RuntimeError(f"无法找到容器 {container_id} 的位置")
+            
+            # 使用mManager客户端复制文件
+            controller_client = mmanager_client.get_client(location["controller_id"])
+            result = await controller_client.copy_file_to_container(
+                container_id, container_path, content_base64, file_name
+            )
+            
+            if not result.get("success", False):
+                raise RuntimeError(f"文件复制失败: {result.get('message', '未知错误')}")
                 
         except Exception as e:
             raise RuntimeError(f"复制文件到容器失败: {str(e)}")
             
-    async def _copy_directory_to_container(self, container_id: str, host_dir: str, container_path: str):
+    async def _copy_directory_to_container(self, db: AsyncSession, container_id: str, host_dir: str, container_path: str):
         """复制目录到容器"""
         
-        if not self.service_manager.docker_client:
-            raise RuntimeError("Docker客户端未初始化")
-            
         try:
-            container = self.service_manager.docker_client.containers.get(container_id)
+            import base64
             
-            # 先删除容器中的目标目录
-            try:
-                container.exec_run(f"rm -rf {container_path}")
-            except:
-                pass  # 忽略删除失败
-                
-            # 创建tar包并复制到容器
+            # 创建tar包并编码为base64
             tar_data = self._create_directory_tar_archive(host_dir)
-            container.put_archive(os.path.dirname(container_path), tar_data)
+            archive_base64 = base64.b64encode(tar_data).decode('utf-8')
             
+            # 找到容器所在的控制器
+            location = await mmanager_client.find_container_location(db, container_id)
+            if not location:
+                raise RuntimeError(f"无法找到容器 {container_id} 的位置")
+            
+            # 使用mManager客户端复制目录
+            controller_client = mmanager_client.get_client(location["controller_id"])
+            result = await controller_client.copy_directory_to_container(
+                container_id, container_path, archive_base64, remove_existing=True
+            )
+            
+            if not result.get("success", False):
+                raise RuntimeError(f"目录复制失败: {result.get('message', '未知错误')}")
+                
         except Exception as e:
             raise RuntimeError(f"复制目录到容器失败: {str(e)}")
             

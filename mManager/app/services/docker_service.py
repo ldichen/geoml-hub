@@ -6,6 +6,10 @@ import asyncio
 import docker
 import psutil
 import logging
+import base64
+import io
+import tarfile
+import os
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 from docker.errors import DockerException, NotFound, APIError
@@ -19,6 +23,9 @@ from app.models.container import (
     ContainerLogsResponse,
     ContainerListResponse,
     ContainerOperationResponse,
+    ContainerFileOperationRequest,
+    ContainerFileOperationResponse,
+    ContainerDirectoryOperationRequest,
     ImageInfo,
     SystemInfo,
 )
@@ -669,6 +676,201 @@ class DockerService:
                 # 处理没有值的环境变量
                 env_dict[env_var] = ""
         return env_dict
+
+    async def copy_file_to_container(
+        self, container_id: str, request: ContainerFileOperationRequest
+    ) -> ContainerFileOperationResponse:
+        """复制文件到容器"""
+        self._ensure_client()
+
+        try:
+            # 获取容器
+            container = self.client.containers.get(container_id)
+
+            # 解码base64内容
+            if not request.content_base64:
+                raise ValueError("文件内容不能为空")
+
+            file_content = base64.b64decode(request.content_base64)
+
+            # 确定文件名
+            file_name = request.file_name or "file"
+
+            # 创建tar包
+            tar_buffer = io.BytesIO()
+            with tarfile.open(fileobj=tar_buffer, mode="w") as tar:
+                info = tarfile.TarInfo(name=file_name)
+                info.size = len(file_content)
+                info.mode = 0o644  # 设置文件权限
+                tar.addfile(info, io.BytesIO(file_content))
+
+            tar_buffer.seek(0)
+
+            # 复制到容器
+            target_dir = os.path.dirname(request.container_path)
+            if not target_dir:
+                target_dir = "/"
+
+            container.put_archive(target_dir, tar_buffer.read())
+
+            logger.info(f"成功复制文件到容器 {container_id}:{request.container_path}")
+
+            return ContainerFileOperationResponse(
+                success=True,
+                container_id=container_id,
+                message=f"文件复制成功: {file_name}",
+                operation="copy_file",
+                file_path=request.container_path,
+                file_size=len(file_content),
+                timestamp=datetime.now(timezone.utc).isoformat(),
+            )
+
+        except NotFound:
+            error_msg = f"容器 {container_id} 不存在"
+            logger.error(error_msg)
+            return ContainerFileOperationResponse(
+                success=False,
+                container_id=container_id,
+                message=error_msg,
+                operation="copy_file",
+                file_path=request.container_path,
+                timestamp=datetime.now(timezone.utc).isoformat(),
+            )
+        except Exception as e:
+            error_msg = f"复制文件失败: {str(e)}"
+            logger.error(f"复制文件到容器失败 {container_id}: {e}")
+            return ContainerFileOperationResponse(
+                success=False,
+                container_id=container_id,
+                message=error_msg,
+                operation="copy_file",
+                file_path=request.container_path,
+                timestamp=datetime.now(timezone.utc).isoformat(),
+            )
+
+    async def copy_directory_to_container(
+        self, container_id: str, request: ContainerDirectoryOperationRequest
+    ) -> ContainerFileOperationResponse:
+        """复制目录到容器"""
+        self._ensure_client()
+
+        try:
+            # 获取容器
+            container = self.client.containers.get(container_id)
+
+            # 解码base64内容
+            tar_content = base64.b64decode(request.archive_base64)
+
+            # 检查容器状态
+            container_info = container.attrs
+            container_status = container_info["State"]["Status"]
+            was_running = container_status == "running"
+
+            logger.info(f"容器 {container_id} 当前状态: {container_status}")
+
+            # 如果容器未运行，先启动容器
+            if not was_running:
+                logger.info(f"容器未运行，启动容器以执行完整替换")
+                try:
+                    container.start()
+                    logger.info(f"容器 {container_id} 启动成功")
+
+                    # 等待容器启动完成
+                    import time
+
+                    # 3次重试机制
+                    for _ in range(3):
+                        time.sleep(2)
+                        # 重新获取容器状态
+                        container.reload()
+                        if container.attrs["State"]["Status"] == "running":
+                            break
+                        logger.info(f"等待容器 {container_id} 启动...")
+
+                    if container.attrs["State"]["Status"] != "running":
+                        raise Exception(
+                            f"容器启动后状态异常: {container.attrs["State"]["Status"]}"
+                        )
+
+                except Exception as e:
+                    logger.error(f"启动容器失败: {e}")
+                    return ContainerFileOperationResponse(
+                        success=False,
+                        container_id=container_id,
+                        message=f"启动容器失败: {str(e)}",
+                        operation="copy_directory",
+                        file_path=request.container_path,
+                        timestamp=datetime.now(timezone.utc).isoformat(),
+                    )
+
+            # 删除现有目录以确保完整替换
+            if request.remove_existing:
+                try:
+                    logger.info(f"删除现有目录: {request.container_path}")
+                    result = container.exec_run(f"rm -rf {request.container_path}")
+                    if result.exit_code == 0:
+                        logger.info(f"成功删除目录: {request.container_path}")
+                    else:
+                        logger.warning(
+                            f"删除目录失败，退出码: {result.exit_code}, 输出: {result.output}"
+                        )
+                except Exception as e:
+                    logger.error(f"删除目录时发生异常: {e}")
+                    return ContainerFileOperationResponse(
+                        success=False,
+                        container_id=container_id,
+                        message=f"删除现有目录失败: {str(e)}",
+                        operation="copy_directory",
+                        file_path=request.container_path,
+                        timestamp=datetime.now(timezone.utc).isoformat(),
+                    )
+
+            # 复制新内容
+            parent_dir = os.path.dirname(request.container_path)
+            if not parent_dir:
+                parent_dir = "/"
+
+            container.put_archive(parent_dir, tar_content)
+
+            operation_type = "完整替换" if request.remove_existing else "合并更新"
+            startup_info = " (已自动启动容器)" if not was_running else ""
+
+            logger.info(
+                f"成功复制目录到容器 {container_id}:{request.container_path} ({operation_type})"
+            )
+
+            return ContainerFileOperationResponse(
+                success=True,
+                container_id=container_id,
+                message=f"目录{operation_type}成功: {request.container_path}{startup_info}",
+                operation="copy_directory",
+                file_path=request.container_path,
+                file_size=len(tar_content),
+                timestamp=datetime.now(timezone.utc).isoformat(),
+            )
+
+        except NotFound:
+            error_msg = f"容器 {container_id} 不存在"
+            logger.error(error_msg)
+            return ContainerFileOperationResponse(
+                success=False,
+                container_id=container_id,
+                message=error_msg,
+                operation="copy_directory",
+                file_path=request.container_path,
+                timestamp=datetime.now(timezone.utc).isoformat(),
+            )
+        except Exception as e:
+            error_msg = f"复制目录失败: {str(e)}"
+            logger.error(f"复制目录到容器失败 {container_id}: {e}")
+            return ContainerFileOperationResponse(
+                success=False,
+                container_id=container_id,
+                message=error_msg,
+                operation="copy_directory",
+                file_path=request.container_path,
+                timestamp=datetime.now(timezone.utc).isoformat(),
+            )
 
 
 # 全局Docker服务实例

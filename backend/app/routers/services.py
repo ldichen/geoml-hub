@@ -1052,12 +1052,21 @@ async def update_service_files(
         if not file_updates:
             raise HTTPException(status_code=400, detail="请至少上传一个文件")
 
-        # 调用容器文件更新服务
-        result = await container_file_service.update_service_files(
-            db, service_id, file_updates, current_user.id
-        )
-
-        return {"message": "文件更新完成", "result": result}
+        # 调用容器文件更新服务 - 使用显式事务管理
+        try:
+            result = await container_file_service.update_service_files(
+                db, service_id, file_updates, current_user.id
+            )
+            # 显式提交数据库事务
+            await db.commit()
+            
+            return {"message": "文件更新完成", "result": result}
+            
+        except Exception as e:
+            # 显式回滚数据库事务
+            await db.rollback()
+            logger.error(f"文件更新失败，事务已回滚: {e}")
+            raise
 
     except PermissionError:
         raise HTTPException(status_code=403, detail="无权限操作此服务")
@@ -1308,7 +1317,11 @@ async def create_service_with_docker_tar(
                 await container_file_service.update_service_files(
                     db, service_response.id, file_updates, current_user.id
                 )
+                # 提交examples文件更新
+                await db.commit()
             except Exception as e:
+                # 回滚examples文件更新，但不影响服务创建
+                await db.rollback()
                 logger.warning(f"上传examples文件失败，但服务创建成功: {e}")
 
         return {

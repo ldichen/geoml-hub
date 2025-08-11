@@ -11,7 +11,10 @@ from app.models.container import (
     ContainerStatsResponse,
     ContainerLogsResponse,
     ContainerListResponse,
-    ContainerOperationResponse
+    ContainerOperationResponse,
+    ContainerFileOperationRequest,
+    ContainerFileOperationResponse,
+    ContainerDirectoryOperationRequest
 )
 from app.services.docker_service import docker_service
 
@@ -129,5 +132,33 @@ async def restart_container(
             start_result.message = "容器重启成功"
         
         return start_result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/{container_id}/files", response_model=ContainerFileOperationResponse)
+async def copy_file_to_container(
+    container_id: str = Path(..., description="容器ID"),
+    request: ContainerFileOperationRequest = ...
+):
+    """复制文件到容器"""
+    try:
+        result = await docker_service.copy_file_to_container(container_id, request)
+        if not result.success:
+            raise HTTPException(status_code=400, detail=result.message)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/{container_id}/directories", response_model=ContainerFileOperationResponse)
+async def copy_directory_to_container(
+    container_id: str = Path(..., description="容器ID"),
+    request: ContainerDirectoryOperationRequest = ...
+):
+    """复制目录到容器"""
+    try:
+        result = await docker_service.copy_directory_to_container(container_id, request)
+        if not result.success:
+            raise HTTPException(status_code=400, detail=result.message)
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

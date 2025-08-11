@@ -190,3 +190,44 @@ class SystemInfo(BaseModel):
     memory_total_gb: float = Field(..., description="总内存(GB)")
     memory_available_gb: float = Field(..., description="可用内存(GB)")
     disk_usage: Dict[str, Any] = Field(default_factory=dict, description="磁盘使用情况")
+
+
+# 文件操作相关模型
+class ContainerFileOperationRequest(BaseModel):
+    """容器文件操作请求"""
+    container_path: str = Field(..., description="容器内目标路径")
+    content_base64: Optional[str] = Field(None, description="文件内容(base64编码)")
+    file_name: Optional[str] = Field(None, description="文件名")
+    is_directory: bool = Field(False, description="是否为目录操作")
+    
+    @validator('container_path')
+    def validate_container_path(cls, v):
+        """验证容器路径"""
+        if not v.startswith('/'):
+            raise ValueError('容器路径必须以/开头')
+        return v
+
+
+class ContainerFileOperationResponse(BaseModel):
+    """容器文件操作响应"""
+    success: bool = Field(..., description="操作是否成功")
+    container_id: str = Field(..., description="容器ID")
+    message: str = Field(..., description="响应消息")
+    operation: str = Field(..., description="操作类型")
+    file_path: str = Field(..., description="文件路径")
+    file_size: Optional[int] = Field(None, description="文件大小")
+    timestamp: str = Field(..., description="操作时间")
+
+
+class ContainerDirectoryOperationRequest(BaseModel):
+    """容器目录操作请求"""
+    container_path: str = Field(..., description="容器内目标路径")
+    archive_base64: str = Field(..., description="tar包内容(base64编码)")
+    remove_existing: bool = Field(True, description="是否删除现有目录")
+    
+    @validator('container_path')
+    def validate_container_path(cls, v):
+        """验证容器路径"""
+        if not v.startswith('/'):
+            raise ValueError('容器路径必须以/开头')
+        return v

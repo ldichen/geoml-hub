@@ -99,6 +99,33 @@ class MManagerClient:
             "GET", "/containers/", params={"all": str(all_containers).lower()}
         )
 
+    async def copy_file_to_container(
+        self, container_id: str, container_path: str, content_base64: str, file_name: str = None
+    ) -> Dict:
+        """复制文件到容器"""
+        request_data = {
+            "container_path": container_path,
+            "content_base64": content_base64,
+            "file_name": file_name,
+            "is_directory": False
+        }
+        return await self._request(
+            "POST", f"/containers/{container_id}/files", json=request_data
+        )
+
+    async def copy_directory_to_container(
+        self, container_id: str, container_path: str, archive_base64: str, remove_existing: bool = True
+    ) -> Dict:
+        """复制目录到容器"""
+        request_data = {
+            "container_path": container_path,
+            "archive_base64": archive_base64,
+            "remove_existing": remove_existing
+        }
+        return await self._request(
+            "POST", f"/containers/{container_id}/directories", json=request_data
+        )
+
 
 class MManagerControllerManager:
     """mManager 控制器管理器"""
