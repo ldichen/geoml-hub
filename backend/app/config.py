@@ -135,6 +135,9 @@ class Settings(BaseSettings):
     max_cpu_limit: str = "8"  # 最大CPU限制
     max_memory_limit: str = "8Gi"  # 最大内存限制
 
+    # Skopeo Push Configuration
+    enable_skopeo_push: bool = True  # 是否启用Skopeo推送
+
     class Config:
         env_file = ".env"
         extra = "ignore"  # 忽略额外的环境变量

@@ -145,7 +145,7 @@
             {service.service_name}
           </h3>
           <p class="text-sm text-gray-500 dark:text-gray-400 truncate">
-            Model: {service.model_id}
+            Model: {service.image.original_name}:{service.image.original_tag}
           </p>
         </div>
       </div>

@@ -4,6 +4,7 @@
 
   export let isOpen = false;
   export let loading = false;
+  export let progress = 0; // 服务创建进度 (0-100)
   export let availableImages = []; // 可用的镜像列表
 
   const dispatch = createEventDispatcher();
@@ -133,19 +134,23 @@
 
       dispatch('create', { type: 'docker-upload', data: submitFormData });
     } else if (creationMode === 'existing-image') {
-      // 新方式：基于已有镜像创建服务
-      // 不再需要手动生成服务名称，后端会自动处理
-      const submitData = {
-        // service_name 不再需要，后端会自动生成
-        image_id: formData.selected_image_id, // 使用 image_id 而非 model_id
-        description: formData.description,
-        cpu_limit: formData.cpu_limit,
-        memory_limit: formData.memory_limit,
-        is_public: formData.is_public,
-        priority: formData.priority
-      };
+      // 新方式：基于已有镜像创建服务，支持示例文件上传
+      const submitFormData = new FormData();
+      
+      // 添加表单数据
+      submitFormData.append('image_id', formData.selected_image_id.toString());
+      submitFormData.append('description', formData.description || '');
+      submitFormData.append('cpu_limit', formData.cpu_limit);
+      submitFormData.append('memory_limit', formData.memory_limit);
+      submitFormData.append('is_public', formData.is_public.toString());
+      submitFormData.append('priority', formData.priority.toString());
+      
+      // 添加示例文件（如果有）
+      if (examplesFile) {
+        submitFormData.append('examples_archive', examplesFile);
+      }
 
-      dispatch('create', { type: 'existing-image', data: submitData });
+      dispatch('create', { type: 'existing-image', data: submitFormData });
     }
   }
 
@@ -222,10 +227,10 @@
       return;
     }
     
-    // 验证文件大小 (最大100MB)
-    const maxSize = 100 * 1024 * 1024;
+    // 验证文件大小 (最大10GB)
+    const maxSize = 10 * 1024 * 1024 * 1024;
     if (file.size > maxSize) {
-      alert('示例数据文件大小不能超过100MB');
+      alert('示例数据文件大小不能超过10GB');
       input.value = '';
       examplesFile = null;
       return;
@@ -348,10 +353,10 @@
     if (files.length > 0) {
       const file = files[0];
       
-      // Validate file size (max 100MB)
-      const maxSize = 100 * 1024 * 1024;
+      // Validate file size (max 10GB)
+      const maxSize = 10 * 1024 * 1024 * 1024;
       if (file.size > maxSize) {
-        alert('示例数据文件大小不能超过100MB');
+        alert('示例数据文件大小不能超过10GB');
         return;
       }
       
@@ -651,8 +656,7 @@
                 ></textarea>
               </div>
 
-              <!-- Examples File Upload (仅在docker-upload模式显示) -->
-              {#if creationMode === 'docker-upload'}
+              <!-- Examples File Upload (所有创建模式都显示) -->
               <div class="md:col-span-3 space-y-2">
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   示例数据 <span class="text-gray-500">(可选)</span>
@@ -713,13 +717,13 @@
                       >
                         {isDragOverExamples ? '释放文件到此处' : '点击选择或拖拽示例数据压缩包'}
                       </button>
-                      <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">支持 ZIP, TAR, TAR.GZ 格式，最大100MB</p>
+                      <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">支持 ZIP, TAR, TAR.GZ 格式，最大10GB</p>
                       <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">可以在服务创建后通过文件更新功能添加</p>
                     </div>
                   </div>
                 {/if}
               </div>
-              {/if}
+
             </div>
 
             <!-- Advanced Configuration Section -->
@@ -841,6 +845,30 @@
               </div>
             </div>
           </div>
+
+          <!-- Progress Display -->
+          {#if loading && progress > 0}
+            <div class="px-4 pb-4">
+              <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-xl p-4">
+                <div class="flex items-center justify-between text-sm text-blue-800 dark:text-blue-200 mb-3">
+                  <span class="font-medium">正在{creationMode === 'docker-upload' ? '上传镜像并' : ''}创建服务...</span>
+                  <div class="flex items-center space-x-2">
+                    <div class="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                    <span>{progress}%</span>
+                  </div>
+                </div>
+                <div class="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2">
+                  <div 
+                    class="bg-blue-500 dark:bg-blue-400 h-2 rounded-full transition-all duration-300" 
+                    style="width: {progress}%"
+                  ></div>
+                </div>
+                <p class="text-xs text-blue-600 dark:text-blue-300 mt-2">
+                  {creationMode === 'docker-upload' ? '镜像上传和' : ''}服务创建可能需要几分钟时间，请耐心等待
+                </p>
+              </div>
+            </div>
+          {/if}
         </div>
 
         <!-- Sticky Footer -->
@@ -851,6 +879,9 @@
                 <div class="flex items-center space-x-2">
                   <div class="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
                   <span>正在创建服务...</span>
+                  {#if progress > 0}
+                    <span class="text-blue-600 dark:text-blue-400 font-medium">{progress}%</span>
+                  {/if}
                 </div>
               {:else}
                 确保所有配置正确后点击创建

@@ -54,10 +54,10 @@
       return;
     }
     
-    // 验证文件大小 (最大100MB)
-    const maxSize = 100 * 1024 * 1024;
+    // 验证文件大小 (最大10GB)
+    const maxSize = 10 *1024 * 1024 * 1024;
     if (file.size > maxSize) {
-      showToast('示例数据文件大小不能超过100MB', 'error');
+      showToast('示例数据文件大小不能超过10GB', 'error');
       input.value = '';
       examplesFile = null;
       return;
@@ -413,7 +413,7 @@
                 >
                   点击选择示例数据压缩包
                 </button>
-                <p class="text-sm text-gray-500 mt-2">支持 ZIP, TAR, TAR.GZ 格式，最大100MB</p>
+                <p class="text-sm text-gray-500 mt-2">支持 ZIP, TAR, TAR.GZ 格式，最大10GB</p>
               </div>
             </div>
           {/if}

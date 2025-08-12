@@ -121,14 +121,6 @@
 				>
 					查看详情
 				</button>
-					{#if image.can_create_service && canManage}
-						<button
-							class="btn btn-sm btn-primary"
-							on:click={handleCreateService}
-						>
-							创建服务
-						</button>
-					{/if}
 					
 
 

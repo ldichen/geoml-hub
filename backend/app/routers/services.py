@@ -32,6 +32,7 @@ from app.dependencies.auth import get_current_user, get_current_user_required
 from app.models.user import User
 from app.models.repository import Repository
 from app.models.service import ModelService, ServiceLog, ServiceHealthCheck
+from app.models.image import Image
 from app.schemas.service import (
     ServiceCreate,
     ServiceUpdate,
@@ -57,6 +58,23 @@ from app.utils.service_helpers import (
     BatchOperationManager,
 )
 from app.utils.logger import logger
+
+
+def _service_to_response_dict(service: ModelService) -> dict:
+    """将服务对象转换为响应字典，安全处理image关系"""
+    service_dict = service.__dict__.copy()
+    if hasattr(service, 'image') and service.image:
+        service_dict['image'] = {
+            'id': service.image.id,
+            'original_name': service.image.original_name,
+            'original_tag': service.image.original_tag,
+            'description': service.image.description,
+            'status': service.image.status
+        }
+    else:
+        service_dict['image'] = None
+    
+    return service_dict
 
 router = APIRouter()
 
@@ -155,7 +173,11 @@ async def get_service_with_permission(
     service_query = (
         select(ModelService)
         .where(ModelService.id == service_id)
-        .options(selectinload(ModelService.repository), selectinload(ModelService.user))
+        .options(
+            selectinload(ModelService.repository), 
+            selectinload(ModelService.user),
+            selectinload(ModelService.image)
+        )
     )
 
     result = await db.execute(service_query)
@@ -204,7 +226,9 @@ async def list_repository_services(
             logger.info("当前为游客用户")
 
         # 构建查询 - 对于游客，只显示公开服务
-        query = select(ModelService).where(ModelService.repository_id == repository.id)
+        query = select(ModelService).options(
+            selectinload(ModelService.image)
+        ).where(ModelService.repository_id == repository.id)
 
         # 如果是游客用户，只能看到公开服务
         if not current_user:
@@ -256,9 +280,14 @@ async def list_repository_services(
         services_result = await db.execute(services_query)
         services = services_result.scalars().all()
 
-        # 构建响应
+        # 构建响应 - 手动处理image序列化
+        service_responses = [
+            ServiceResponse.model_validate(_service_to_response_dict(service))
+            for service in services
+        ]
+        
         response = ServiceListResponse(
-            services=[ServiceResponse.model_validate(service) for service in services],
+            services=service_responses,
             total=total,
             page=page,
             size=size,
@@ -281,17 +310,68 @@ async def list_repository_services(
     status_code=201,
 )
 async def create_service_with_image(
-    service_data: ServiceCreate,
-    repository: Repository = Depends(get_repository_with_permission),
-    current_user: User = Depends(get_current_user),
+    username: str = Path(..., description="仓库所有者用户名"),
+    repo_name: str = Path(..., description="仓库名称"),
+    image_id: int = Form(..., description="镜像ID"),
+    description: Optional[str] = Form(None, description="服务描述"),
+    cpu_limit: str = Form("2", description="CPU限制"),
+    memory_limit: str = Form("2Gi", description="内存限制"),
+    is_public: bool = Form(False, description="是否公开访问"),
+    priority: int = Form(2, ge=0, le=3, description="启动优先级"),
+    examples_archive: Optional[UploadFile] = File(None, description="可选的examples目录压缩包"),
+    current_user: User = Depends(get_current_user_required),
     db: AsyncSession = Depends(get_async_db),
 ):
     """基于已有镜像创建模型服务"""
 
     try:
+        # 获取仓库 
+        repo_query = (
+            select(Repository)
+            .join(User, Repository.owner_id == User.id)
+            .where(and_(User.username == username, Repository.name == repo_name))
+            .options(selectinload(Repository.owner))
+        )
+
+        result = await db.execute(repo_query)
+        repository = result.scalar_one_or_none()
+
+        if not repository:
+            raise HTTPException(status_code=404, detail="仓库不存在")
+
+        # 检查权限：只有仓库所有者可以创建服务
+        ServicePermissionManager.check_repository_owner_permission(
+            repository, current_user, "创建服务"
+        )
+
+        # 创建服务数据
+        service_data = ServiceCreate(
+            image_id=image_id,
+            description=description,
+            cpu_limit=cpu_limit,
+            memory_limit=memory_limit,
+            is_public=is_public,
+            priority=priority,
+        )
+
         service, _ = await ServiceCreationManager.create_service_from_image(
             db, service_data, repository, current_user, service_manager
         )
+
+        # 如果上传了examples文件，处理它
+        if examples_archive:
+            file_updates = {"examples": examples_archive}
+            try:
+                await container_file_service.update_service_files(
+                    db, service.id, file_updates, current_user.id
+                )
+                # 提交examples文件更新
+                await db.commit()
+            except Exception as e:
+                # 回滚examples文件更新，但不影响服务创建
+                await db.rollback()
+                logger.warning(f"上传examples文件失败，但服务创建成功: {e}")
+
         return service
     except HTTPException:
         raise
@@ -304,7 +384,7 @@ async def create_service_with_image(
 @router.get("/{service_id:int}", response_model=ServiceResponse)
 async def get_service(service: ModelService = Depends(get_service_with_permission)):
     """获取服务详情"""
-    return ServiceResponse.model_validate(service)
+    return ServiceResponse.model_validate(_service_to_response_dict(service))
 
 
 @router.put("/{service_id:int}", response_model=ServiceResponse)
@@ -330,7 +410,7 @@ async def update_service(
         await db.commit()
         await db.refresh(service)
 
-        return ServiceResponse.model_validate(service)
+        return ServiceResponse.model_validate(_service_to_response_dict(service))
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"更新服务失败: {str(e)}")
@@ -1059,9 +1139,9 @@ async def update_service_files(
             )
             # 显式提交数据库事务
             await db.commit()
-            
+
             return {"message": "文件更新完成", "result": result}
-            
+
         except Exception as e:
             # 显式回滚数据库事务
             await db.rollback()
@@ -1110,11 +1190,11 @@ async def create_service_with_docker_tar(
         if not docker_tar.filename.lower().endswith((".tar", ".tar.gz", ".tgz")):
             raise HTTPException(status_code=400, detail="Docker镜像必须是tar包格式")
 
-        # 验证文件大小 (最大8GB)
-        max_size = 8 * 1024 * 1024 * 1024
+        # 验证文件大小 (最大20GB)
+        max_size = 20 * 1024 * 1024 * 1024
         if docker_tar.size and docker_tar.size > max_size:
             raise HTTPException(
-                status_code=400, detail="Docker镜像tar包大小不能超过8GB"
+                status_code=400, detail=f"Docker镜像tar包大小不能超过{max_size}GB"
             )
 
         # 获取仓库 - 直接实现权限检查逻辑，避免依赖注入问题

@@ -6,7 +6,13 @@ from typing import List, Optional
 from app.database import get_async_db
 from datetime import datetime, timezone, timedelta
 import logging
-from app.models import Repository, RepositoryFile, RepositoryStar, User, RepositoryClassification
+from app.models import (
+    Repository,
+    RepositoryFile,
+    RepositoryStar,
+    User,
+    RepositoryClassification,
+)
 from app.utils.repository_utils import enrich_repositories_with_classification_paths
 from app.schemas.repository import (
     RepositoryCreate,
@@ -46,7 +52,9 @@ async def list_repositories(
     page: int = Query(1, ge=1, description="页码"),
     per_page: int = Query(20, ge=1, le=100, description="每页数量"),
     skip: Optional[int] = Query(None, ge=0, description="跳过数量（兼容参数）"),
-    limit: Optional[int] = Query(None, ge=1, le=100, description="限制数量（兼容参数）"),
+    limit: Optional[int] = Query(
+        None, ge=1, le=100, description="限制数量（兼容参数）"
+    ),
     search: Optional[str] = Query(None, description="搜索仓库名称或描述"),
     q: Optional[str] = Query(None, description="搜索查询（兼容参数）"),
     repo_type: Optional[str] = Query(None, regex="^(model|dataset|space)$"),
@@ -80,7 +88,7 @@ async def list_repositories(
         order = sort_order
     if is_featured is not None:
         featured_only = is_featured
-    
+
     # 计算实际的 skip 值
     calculated_skip = (page - 1) * per_page
 
@@ -119,7 +127,7 @@ async def list_repositories(
     if classification_id:
         # Convert single classification to list for unified handling
         classification_ids = [classification_id]
-    
+
     # 多分类筛选 (OR 关系)
     if classification_ids:
         # Use EXISTS subquery instead of JOIN to avoid potential issues
@@ -172,7 +180,9 @@ async def list_repositories(
     repositories = result.scalars().all()
 
     # 丰富仓库数据
-    enriched_repositories = await enrich_repositories_with_classification_paths(repositories, db)
+    enriched_repositories = await enrich_repositories_with_classification_paths(
+        repositories, db
+    )
 
     # 计算分页信息
     total_pages = (total + per_page - 1) // per_page  # 向上取整
@@ -226,17 +236,19 @@ async def get_repository(
         from app.services.classification import ClassificationService
         from app.models import RepositoryClassification
         from sqlalchemy import select
-        
+
         classification_service = ClassificationService(db)
-        
+
         # 获取仓库的分类关联
-        classification_query = select(RepositoryClassification).where(
-            RepositoryClassification.repository_id == repository.id
-        ).order_by(RepositoryClassification.level.desc())
-        
+        classification_query = (
+            select(RepositoryClassification)
+            .where(RepositoryClassification.repository_id == repository.id)
+            .order_by(RepositoryClassification.level.desc())
+        )
+
         result = await db.execute(classification_query)
         repo_classifications = result.scalars().all()
-        
+
         # 获取最深层级的分类路径
         classification_path = []
         if repo_classifications:
@@ -245,17 +257,17 @@ async def get_repository(
             classification_path = await classification_service.get_classification_path(
                 deepest_classification.classification_id
             )
-        
+
         # 创建包含分类路径的仓库数据
         repo_dict = repository.__dict__.copy()
-        repo_dict['classification_path'] = classification_path
-        
+        repo_dict["classification_path"] = classification_path
+
         # 返回原始仓库对象，但添加classification_path属性
-        setattr(repository, 'classification_path', classification_path)
-        
+        setattr(repository, "classification_path", classification_path)
+
     except Exception as e:
         logger.error(f"Failed to add classification path: {e}")
-    
+
     return repository
 
 
@@ -581,7 +593,6 @@ async def get_upload_status(
     return status
 
 
-
 @router.get("/{owner}/{repo_name}/download/{file_path:path}")
 async def download_file(
     owner: str = Path(..., description="仓库所有者用户名"),
@@ -642,62 +653,63 @@ async def serve_file_directly(
     """直接提供文件内容（主要用于README中的图片显示）"""
     from app.dependencies.minio import get_minio_service
     from fastapi.responses import Response
-    
+
     # 获取 MinIO 服务
     minio_service = get_minio_service()
-    
+
     try:
         # 获取仓库
         repo_service = RepositoryService(db)
-        repository = await repo_service.get_repository_by_full_name(f"{owner}/{repo_name}")
-        
+        repository = await repo_service.get_repository_by_full_name(
+            f"{owner}/{repo_name}"
+        )
+
         if not repository:
             raise HTTPException(status_code=404, detail="仓库不存在")
-        
+
         # 检查私有仓库访问权限
         if repository.visibility == "private":
             if not current_user or current_user.username != owner:
                 raise HTTPException(status_code=403, detail="无权访问私有仓库文件")
-        
+
         # 查找文件
         query = select(RepositoryFile).where(
             and_(
                 RepositoryFile.repository_id == repository.id,
                 RepositoryFile.file_path == file_path,
-                RepositoryFile.is_deleted == False
+                RepositoryFile.is_deleted == False,
             )
         )
-        
+
         result = await db.execute(query)
         file_obj = result.scalar_one_or_none()
-        
+
         if not file_obj:
             raise HTTPException(status_code=404, detail="文件不存在")
-        
+
         # 从MinIO获取文件内容
         try:
             file_content = await minio_service.get_file_content(
-                bucket_name=file_obj.minio_bucket,
-                object_key=file_obj.minio_object_key
+                bucket_name=file_obj.minio_bucket, object_key=file_obj.minio_object_key
             )
-            
+
             # 设置适当的Content-Type
             content_type = file_obj.mime_type or "application/octet-stream"
-            
+
             # 返回文件内容
             return Response(
                 content=file_content,
                 media_type=content_type,
                 headers={
                     "Content-Disposition": f"inline; filename={file_obj.filename}",
-                    "Cache-Control": "public, max-age=3600"  # 缓存1小时
-                }
+                    "Cache-Control": "public, max-age=3600",  # 缓存1小时
+                },
             )
-            
+
         except Exception as e:
             logger.error(f"Error reading file from MinIO: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail=f"读取文件内容失败: {str(e)}")
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -716,62 +728,76 @@ async def get_file_content(
 ):
     """获取文件内容（用于文件查看页面）"""
     from app.dependencies.minio import get_minio_service
-    
+
     # 获取 MinIO 服务
     minio_service = get_minio_service()
-    
+
     try:
         # 获取仓库
         repo_service = RepositoryService(db)
-        repository = await repo_service.get_repository_by_full_name(f"{owner}/{repo_name}")
-        
+        repository = await repo_service.get_repository_by_full_name(
+            f"{owner}/{repo_name}"
+        )
+
         if not repository:
             raise HTTPException(status_code=404, detail="仓库不存在")
-        
+
         # 检查私有仓库访问权限
         if repository.visibility == "private":
             if not current_user or current_user.username != owner:
                 raise HTTPException(status_code=403, detail="无权访问私有仓库文件")
-        
+
         # 查找文件
         query = select(RepositoryFile).where(
             and_(
                 RepositoryFile.repository_id == repository.id,
                 RepositoryFile.file_path == file_path,
-                RepositoryFile.is_deleted == False
+                RepositoryFile.is_deleted == False,
             )
         )
-        
+
         result = await db.execute(query)
         file_obj = result.scalar_one_or_none()
-        
+
         if not file_obj:
             raise HTTPException(status_code=404, detail="文件不存在")
-        
+
         # 从MinIO获取文件内容
         try:
             # 获取文件内容 - 使用正确的参数名
             file_content = await minio_service.get_file_content(
-                bucket_name=file_obj.minio_bucket,
-                object_key=file_obj.minio_object_key
+                bucket_name=file_obj.minio_bucket, object_key=file_obj.minio_object_key
             )
-            
+
             # 尝试解码为文本（用于文本文件）
             content_text = None
             is_text_file = False
-            
+
             try:
                 # 检查是否为文本文件 - 使用正确的字段名
-                if file_obj.mime_type and file_obj.mime_type.startswith('text/'):
-                    content_text = file_content.decode('utf-8')
+                if file_obj.mime_type and file_obj.mime_type.startswith("text/"):
+                    content_text = file_content.decode("utf-8")
                     is_text_file = True
-                elif file_obj.filename.endswith(('.md', '.txt', '.py', '.js', '.ts', '.json', '.yaml', '.yml', '.xml', '.csv')):
-                    content_text = file_content.decode('utf-8')
+                elif file_obj.filename.endswith(
+                    (
+                        ".md",
+                        ".txt",
+                        ".py",
+                        ".js",
+                        ".ts",
+                        ".json",
+                        ".yaml",
+                        ".yml",
+                        ".xml",
+                        ".csv",
+                    )
+                ):
+                    content_text = file_content.decode("utf-8")
                     is_text_file = True
             except UnicodeDecodeError:
                 # 不是文本文件或编码问题
                 pass
-            
+
             return {
                 "id": file_obj.id,
                 "filename": file_obj.filename,
@@ -789,15 +815,17 @@ async def get_file_content(
                     "name": repository.name,
                     "full_name": repository.full_name,
                     "owner": {
-                        "username": repository.owner.username if repository.owner else owner
-                    }
-                }
+                        "username": (
+                            repository.owner.username if repository.owner else owner
+                        )
+                    },
+                },
             }
-            
+
         except Exception as e:
             logger.error(f"Error reading file from MinIO: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail=f"读取文件内容失败: {str(e)}")
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -807,15 +835,17 @@ async def get_file_content(
 
 from pydantic import BaseModel
 
+
 class FileUpdateRequest(BaseModel):
     content: str
     commit_message: str
+
 
 @router.put("/{owner}/{repo_name}/blob/{file_path:path}")
 async def update_file_content(
     request: FileUpdateRequest,
     owner: str = Path(..., description="仓库所有者用户名"),
-    repo_name: str = Path(..., description="仓库名称"), 
+    repo_name: str = Path(..., description="仓库名称"),
     file_path: str = Path(..., description="文件路径"),
     current_user: Optional[User] = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db),
@@ -824,74 +854,77 @@ async def update_file_content(
     from app.dependencies.minio import get_minio_service
     import io
     from datetime import datetime
-    
+
     # 获取 MinIO 服务
     minio_service = get_minio_service()
-    
+
     try:
         # 获取仓库
         repo_service = RepositoryService(db)
-        repository = await repo_service.get_repository_by_full_name(f"{owner}/{repo_name}")
-        
+        repository = await repo_service.get_repository_by_full_name(
+            f"{owner}/{repo_name}"
+        )
+
         if not repository:
             raise HTTPException(status_code=404, detail="仓库不存在")
-        
+
         # 检查权限（暂时简化，实际应该检查用户是否有写权限）
         if repository.visibility == "private":
             if not current_user or current_user.username != owner:
                 raise HTTPException(status_code=403, detail="无权修改此仓库文件")
-        
+
         # 查找文件
         query = select(RepositoryFile).where(
             and_(
                 RepositoryFile.repository_id == repository.id,
                 RepositoryFile.file_path == file_path,
-                RepositoryFile.is_deleted == False
+                RepositoryFile.is_deleted == False,
             )
         )
-        
+
         result = await db.execute(query)
         file_obj = result.scalar_one_or_none()
-        
+
         if not file_obj:
             raise HTTPException(status_code=404, detail="文件不存在")
-        
+
         # 将内容转换为字节
-        content_bytes = request.content.encode('utf-8')
+        content_bytes = request.content.encode("utf-8")
         content_size = len(content_bytes)
-        
+
         # 上传新内容到MinIO
         await minio_service.upload_file_stream(
             bucket_name=file_obj.minio_bucket,
             object_key=file_obj.minio_object_key,
             file_stream=io.BytesIO(content_bytes),
             file_size=content_size,
-            content_type=file_obj.mime_type or 'text/plain'
+            content_type=file_obj.mime_type or "text/plain",
         )
-        
+
         # 更新数据库记录
         file_obj.file_size = content_size
         file_obj.updated_at = datetime.utcnow()
-        
+
         # 更新仓库的最后修改时间
         repository.updated_at = datetime.utcnow()
         repository.last_commit_message = request.commit_message
         repository.last_commit_at = datetime.utcnow()
-        
+
         # 如果更新的是README.md文件，同步metadata到数据库
-        if file_path.lower() in ['readme.md', 'README.md']:
+        if file_path.lower() in ["readme.md", "README.md"]:
             from app.services.metadata_sync_service import MetadataSyncService
+
             metadata_sync = MetadataSyncService(db)
             # 更新数据库中的readme_content字段
             repository.readme_content = request.content
             # 同步YAML frontmatter到数据库字段
             await metadata_sync.sync_readme_to_repository(repository, request.content)
-        
+
         # 提交数据库更改
         await db.commit()
-        
+
         logger.info(f"File updated successfully: {owner}/{repo_name}/{file_path}")
-        
+
         return {
             "success": True,
             "message": "文件更新成功",
@@ -905,10 +938,10 @@ async def update_file_content(
             "commit_info": {
                 "commit_message": request.commit_message,
                 "committed_at": repository.last_commit_at.isoformat(),
-                "author": current_user.username if current_user else owner
-            }
+                "author": current_user.username if current_user else owner,
+            },
         }
-            
+
     except HTTPException:
         raise
     except Exception as e:
@@ -1350,12 +1383,12 @@ async def batch_upload_files(
     for file in files:
         try:
             # 验证文件
-            if getattr(file, "size") > 100 * 1024 * 1024:  # 100MB限制
+            if getattr(file, "size") > 10 * 1024 * 1024 * 1024:  # 10GB限制
                 upload_results.append(
                     {
                         "filename": file.filename,
                         "status": "error",
-                        "error": "文件大小超过100MB限制",
+                        "error": "文件大小超过10GB限制",
                     }
                 )
                 continue
@@ -1441,11 +1474,11 @@ async def get_repository_analytics(
         since_date = datetime.now(timezone.utc) - time_ranges[period]
 
     # 获取仓库统计数据
-    stars_count = getattr(repository, 'stars_count', 0) or 0
-    views_count = getattr(repository, 'views_count', 0) or 0
-    downloads_count = getattr(repository, 'downloads_count', 0) or 0
-    total_size = getattr(repository, 'total_size', 0) or 0
-    total_files = getattr(repository, 'total_files', 0) or 0
+    stars_count = getattr(repository, "stars_count", 0) or 0
+    views_count = getattr(repository, "views_count", 0) or 0
+    downloads_count = getattr(repository, "downloads_count", 0) or 0
+    total_size = getattr(repository, "total_size", 0) or 0
+    total_files = getattr(repository, "total_files", 0) or 0
 
     # 基础统计
     basic_stats = {
@@ -1473,7 +1506,7 @@ async def get_repository_analytics(
     ]
     if since_date:
         file_type_conditions.append(RepositoryFile.created_at >= since_date)
-    
+
     file_type_stats = await db.execute(
         select(
             RepositoryFile.file_type,
@@ -1502,7 +1535,7 @@ async def get_repository_analytics(
     ]
     if since_date:
         popular_files_conditions.append(RepositoryFile.created_at >= since_date)
-    
+
     popular_files = await db.execute(
         select(
             RepositoryFile.filename,
@@ -1531,29 +1564,17 @@ async def get_repository_analytics(
     storage_analysis = {
         "total_size": total_size,
         "total_files": total_files,
-        "avg_file_size": (
-            total_size / total_files
-            if total_files > 0
-            else 0
-        ),
+        "avg_file_size": (total_size / total_files if total_files > 0 else 0),
         "file_type_distribution": file_analysis,
-        "storage_efficiency": _calculate_storage_efficiency(
-            total_size, total_files
-        ),
+        "storage_efficiency": _calculate_storage_efficiency(total_size, total_files),
         "growth_trend": _calculate_growth_trend(repository, since_date),
     }
 
     # 用户互动分析
     engagement_stats = {
-        "stars_to_views_ratio": (
-            stars_count / views_count
-            if views_count > 0
-            else 0
-        ),
+        "stars_to_views_ratio": (stars_count / views_count if views_count > 0 else 0),
         "downloads_to_views_ratio": (
-            downloads_count / views_count
-            if views_count > 0
-            else 0
+            downloads_count / views_count if views_count > 0 else 0
         ),
         "popularity_score": _calculate_popularity_score(repository),
         "engagement_level": _get_engagement_level(repository),
@@ -1596,7 +1617,7 @@ def _calculate_growth_trend(repository, since_date) -> str:
 
     days = (datetime.now(timezone.utc) - since_date).days
     if days > 0:
-        total_size = getattr(repository, 'total_size', 0) or 0
+        total_size = getattr(repository, "total_size", 0) or 0
         daily_growth = total_size / days
         if daily_growth > 100 * 1024 * 1024:  # 100MB/day
             return "快速增长"
@@ -1610,10 +1631,10 @@ def _calculate_growth_trend(repository, since_date) -> str:
 def _calculate_popularity_score(repository) -> float:
     """计算受欢迎程度得分"""
     # 综合评分算法
-    stars_count = getattr(repository, 'stars_count', 0) or 0
-    views_count = getattr(repository, 'views_count', 0) or 0
-    downloads_count = getattr(repository, 'downloads_count', 0) or 0
-    
+    stars_count = getattr(repository, "stars_count", 0) or 0
+    views_count = getattr(repository, "views_count", 0) or 0
+    downloads_count = getattr(repository, "downloads_count", 0) or 0
+
     stars_score = min(stars_count / 100, 1.0) * 0.4
     views_score = min(views_count / 1000, 1.0) * 0.3
     downloads_score = min(downloads_count / 500, 1.0) * 0.3
@@ -1623,10 +1644,10 @@ def _calculate_popularity_score(repository) -> float:
 
 def _get_engagement_level(repository) -> str:
     """获取用户互动水平"""
-    stars_count = getattr(repository, 'stars_count', 0) or 0
-    views_count = getattr(repository, 'views_count', 0) or 0
-    downloads_count = getattr(repository, 'downloads_count', 0) or 0
-    
+    stars_count = getattr(repository, "stars_count", 0) or 0
+    views_count = getattr(repository, "views_count", 0) or 0
+    downloads_count = getattr(repository, "downloads_count", 0) or 0
+
     total_interactions = stars_count + views_count + downloads_count
 
     if total_interactions > 10000:
@@ -1646,9 +1667,9 @@ def _get_repository_recommendations(
     recommendations = []
 
     # 存储优化建议
-    total_size = getattr(repository, 'total_size', 0) or 0
-    total_files = getattr(repository, 'total_files', 0) or 0
-    
+    total_size = getattr(repository, "total_size", 0) or 0
+    total_files = getattr(repository, "total_files", 0) or 0
+
     if total_size > 1 * 1024 * 1024 * 1024:  # 1GB
         recommendations.append("仓库体积较大，建议使用Git LFS管理大文件")
 
@@ -1663,10 +1684,10 @@ def _get_repository_recommendations(
         recommendations.append("下载率较低，建议提供更清晰的使用说明")
 
     # 内容建议
-    description = getattr(repository, 'description', None)
-    readme_content = getattr(repository, 'readme_content', None)
-    is_featured = getattr(repository, 'is_featured', False)
-    
+    description = getattr(repository, "description", None)
+    readme_content = getattr(repository, "readme_content", None)
+    is_featured = getattr(repository, "is_featured", False)
+
     if not description:
         recommendations.append("建议添加仓库描述以提高可发现性")
 
@@ -1692,11 +1713,13 @@ async def rename_file(
     db: AsyncSession = Depends(get_async_db),
 ):
     """重命名仓库中的文件"""
-    
+
     try:
         # 检查仓库是否存在
         repo_service = RepositoryService(db)
-        repository = await repo_service.get_repository_by_full_name(f"{owner}/{repo_name}")
+        repository = await repo_service.get_repository_by_full_name(
+            f"{owner}/{repo_name}"
+        )
         if not repository:
             raise HTTPException(status_code=404, detail="仓库不存在")
 
@@ -1707,17 +1730,21 @@ async def rename_file(
         # 获取请求参数
         old_path = rename_data.get("old_path", "")
         new_filename = rename_data.get("new_filename", "")
-        commit_message = rename_data.get("commit_message", f"重命名文件: {old_path} -> {new_filename}")
+        commit_message = rename_data.get(
+            "commit_message", f"重命名文件: {old_path} -> {new_filename}"
+        )
 
         if not old_path or not new_filename:
-            raise HTTPException(status_code=400, detail="old_path 和 new_filename 不能为空")
+            raise HTTPException(
+                status_code=400, detail="old_path 和 new_filename 不能为空"
+            )
 
         # 查找要重命名的文件
         file_query = select(RepositoryFile).where(
             and_(
                 RepositoryFile.repository_id == repository.id,
                 RepositoryFile.file_path == old_path,
-                RepositoryFile.is_deleted == False
+                RepositoryFile.is_deleted == False,
             )
         )
         file_result = await db.execute(file_query)
@@ -1727,12 +1754,16 @@ async def rename_file(
             raise HTTPException(status_code=404, detail="文件不存在")
 
         # 检查新文件名是否已存在
-        new_path = old_path.rsplit('/', 1)[0] + '/' + new_filename if '/' in old_path else new_filename
+        new_path = (
+            old_path.rsplit("/", 1)[0] + "/" + new_filename
+            if "/" in old_path
+            else new_filename
+        )
         existing_file_query = select(RepositoryFile).where(
             and_(
                 RepositoryFile.repository_id == repository.id,
                 RepositoryFile.file_path == new_path,
-                RepositoryFile.is_deleted == False
+                RepositoryFile.is_deleted == False,
             )
         )
         existing_result = await db.execute(existing_file_query)
@@ -1759,8 +1790,12 @@ async def rename_file(
                 "filename": file_record.filename,
                 "file_path": file_record.file_path,
                 "file_size": file_record.file_size,
-                "updated_at": file_record.updated_at.isoformat() if file_record.updated_at else None
-            }
+                "updated_at": (
+                    file_record.updated_at.isoformat()
+                    if file_record.updated_at
+                    else None
+                ),
+            },
         }
 
     except HTTPException:

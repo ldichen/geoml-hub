@@ -1,6 +1,6 @@
 <script>
   import { createEventDispatcher } from 'svelte';
-  import { X, Save, Trash2, AlertCircle, Info, Eye, EyeOff, RefreshCw } from 'lucide-svelte';
+  import { X, Save, Settings, Shield, Cpu, HardDrive, Upload, FileText, Package, FolderOpen, AlertCircle, Info } from 'lucide-svelte';
   import { api } from '$lib/utils/api';
 
   export let service;
@@ -9,15 +9,70 @@
 
   const dispatch = createEventDispatcher();
 
-  let formData = { ...service };
+  // 资源配置预设
+  const resourceConfigs = {
+    'lightweight': { cpu: '1', memory: '1Gi', label: '轻量配置', icon: 'eco', color: 'green' },
+    'recommended': { cpu: '2', memory: '2Gi', label: '推荐配置', icon: 'zap', color: 'blue' },
+    'performance': { cpu: '4', memory: '4Gi', label: '性能配置', icon: 'rocket', color: 'purple' }
+  };
+
+  let formData = {
+    resource_config: 'recommended', // 资源配置预设选择
+    cpu_limit: '2',
+    memory_limit: '2Gi',
+    is_public: false
+  };
   let errors = {};
-  let showAccessToken = false;
-  let regeneratingToken = false;
+
+  // 文件上传状态
+  let mcJsonFile = null;
+  let gogogoFile = null;
+  let modelFile = null;
+  let examplesFile = null;
+
+  // File input references
+  let mcJsonFileRef;
+  let gogogoFileRef;
+  let modelFileRef;
+  let examplesFileRef;
+
+  // Drag and drop states
+  let isDragOverMcJson = false;
+  let isDragOverGogogo = false;
+  let isDragOverModel = false;
+  let isDragOverExamples = false;
 
   // Reset form data when service changes
   $: if (service) {
-    formData = { ...service };
+    formData = {
+      resource_config: getCurrentResourceConfig(service.cpu_limit, service.memory_limit),
+      cpu_limit: service.cpu_limit || '2',
+      memory_limit: service.memory_limit || '2Gi',
+      is_public: service.is_public || false
+    };
     errors = {};
+    resetFiles();
+  }
+
+  function getCurrentResourceConfig(cpu, memory) {
+    // 根据当前CPU和内存配置确定预设
+    for (const [key, config] of Object.entries(resourceConfigs)) {
+      if (config.cpu === cpu && config.memory === memory) {
+        return key;
+      }
+    }
+    return 'recommended'; // 默认推荐配置
+  }
+
+  function resetFiles() {
+    mcJsonFile = null;
+    gogogoFile = null;
+    modelFile = null;
+    examplesFile = null;
+    if (mcJsonFileRef) mcJsonFileRef.value = '';
+    if (gogogoFileRef) gogogoFileRef.value = '';
+    if (modelFileRef) modelFileRef.value = '';
+    if (examplesFileRef) examplesFileRef.value = '';
   }
 
   function handleClose() {
@@ -27,43 +82,29 @@
   }
 
   function resetForm() {
-    formData = { ...service };
+    if (service) {
+      formData = {
+        resource_config: getCurrentResourceConfig(service.cpu_limit, service.memory_limit),
+        cpu_limit: service.cpu_limit || '2',
+        memory_limit: service.memory_limit || '2Gi',
+        is_public: service.is_public || false
+      };
+    }
     errors = {};
-    showAccessToken = false;
+    resetFiles();
+  }
+
+  // 处理资源配置变更
+  function handleResourceConfigChange() {
+    const config = resourceConfigs[formData.resource_config];
+    if (config) {
+      formData.cpu_limit = config.cpu;
+      formData.memory_limit = config.memory;
+    }
   }
 
   function validateForm() {
     errors = {};
-
-    // Service name validation
-    if (!formData.service_name?.trim()) {
-      errors.service_name = '服务名称是必填项';
-    } else if (!/^[a-zA-Z0-9_-]+$/.test(formData.service_name)) {
-      errors.service_name = '服务名称只能包含字母、数字、下划线和连字符';
-    }
-
-    // CPU limit validation
-    if (!formData.cpu_limit?.trim()) {
-      errors.cpu_limit = 'CPU限制是必填项';
-    } else {
-      const cpuValue = parseFloat(formData.cpu_limit);
-      if (isNaN(cpuValue) || cpuValue <= 0 || cpuValue > 4) {
-        errors.cpu_limit = 'CPU限制必须是0到4之间的数字';
-      }
-    }
-
-    // Memory limit validation
-    if (!formData.memory_limit?.trim()) {
-      errors.memory_limit = '内存限制是必填项';
-    } else if (!/^\d+(\.\d+)?(Mi|Gi|KB|MB|GB)$/i.test(formData.memory_limit)) {
-      errors.memory_limit = '内存限制格式不正确，例如: 256Mi, 1Gi';
-    }
-
-    // Priority validation
-    if (typeof formData.priority !== 'number' || formData.priority < 1 || formData.priority > 1000) {
-      errors.priority = '优先级必须在1到1000之间';
-    }
-
     return Object.keys(errors).length === 0;
   }
 
@@ -75,59 +116,36 @@
     try {
       loading = true;
 
-      // Prepare update data
-      const updateData = {
-        service_name: formData.service_name,
-        description: formData.description,
-        cpu_limit: formData.cpu_limit,
-        memory_limit: formData.memory_limit,
-        is_public: formData.is_public
-      };
+      // 准备更新数据
+      const updateData = new FormData();
+      updateData.append('cpu_limit', formData.cpu_limit);
+      updateData.append('memory_limit', formData.memory_limit);
+      updateData.append('is_public', formData.is_public.toString());
 
-      await api.updateService(service.id, updateData);
+      // 添加文件更新
+      if (mcJsonFile) {
+        updateData.append('mc_json', mcJsonFile);
+      }
+      if (gogogoFile) {
+        updateData.append('gogogo_py', gogogoFile);
+      }
+      if (modelFile) {
+        updateData.append('model_archive', modelFile);
+      }
+      if (examplesFile) {
+        updateData.append('examples_archive', examplesFile);
+      }
+
+      await api.updateServiceFiles(service.id, updateData);
       
-      dispatch('updated', formData);
+      dispatch('updated', { ...formData, id: service.id });
       handleClose();
     } catch (error) {
       console.error('Failed to update service:', error);
-      // You might want to show a toast notification here
       alert(`更新服务失败: ${error.message}`);
     } finally {
       loading = false;
     }
-  }
-
-  async function handleRegenerateToken() {
-    try {
-      regeneratingToken = true;
-      
-      const response = await api.generateAccessToken(service.id, {
-        regenerate_token: true
-      });
-      
-      formData.access_token = response.access_token;
-      
-      dispatch('tokenRegenerated', response.access_token);
-    } catch (error) {
-      console.error('Failed to regenerate access token:', error);
-      alert(`重新生成访问令牌失败: ${error.message}`);
-    } finally {
-      regeneratingToken = false;
-    }
-  }
-
-  function copyAccessToken() {
-    if (formData.access_token) {
-      navigator.clipboard.writeText(formData.access_token).then(() => {
-        // Show success feedback
-        alert('访问令牌已复制到剪贴板');
-      });
-    }
-  }
-
-  function handleDelete() {
-    dispatch('delete', service);
-    handleClose();
   }
 
   function handleKeydown(event) {
@@ -136,34 +154,243 @@
     }
   }
 
-  // CPU and Memory presets
-  const cpuPresets = [
-    { value: '1', label: '1 cores' },
-    { value: '2', label: '2 cores' },
-    { value: '4', label: '4 cores' },
-    { value: '8', label: '8 cores' }
-  ];
+  // File handling functions
+  function handleFileSelect(event, fileType) {
+    const input = event.target;
+    const file = input.files?.[0];
+    
+    if (!file) {
+      setFile(fileType, null);
+      return;
+    }
+    
+    // Validate file based on type
+    const validationResult = validateFile(file, fileType);
+    if (!validationResult.isValid) {
+      alert(validationResult.message);
+      input.value = '';
+      setFile(fileType, null);
+      return;
+    }
+    
+    setFile(fileType, file);
+  }
 
-  const memoryPresets = [
-    { value: '1Gi', label: '1Gi' },
-    { value: '2Gi', label: '2Gi' },
-    { value: '4Gi', label: '4Gi' },
-    { value: '8Gi', label: '8Gi' }
-  ];
+  function validateFile(file, fileType) {
+    switch (fileType) {
+      case 'mcJson':
+        if (!file.name.toLowerCase().endsWith('.json')) {
+          return { isValid: false, message: 'mc.json 必须是JSON格式文件' };
+        }
+        if (file.size > 1024 * 1024) { // 1MB
+          return { isValid: false, message: 'mc.json 文件大小不能超过1MB' };
+        }
+        break;
+      case 'gogogo':
+        if (!file.name.toLowerCase().endsWith('.py')) {
+          return { isValid: false, message: 'gogogo.py 必须是Python文件' };
+        }
+        if (file.size > 10 * 1024 * 1024) { // 10MB
+          return { isValid: false, message: 'gogogo.py 文件大小不能超过10MB' };
+        }
+        break;
+      case 'model':
+        const modelExtensions = ['.zip', '.tar', '.tar.gz', '.tgz'];
+        const isValidModel = modelExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
+        if (!isValidModel) {
+          return { isValid: false, message: 'model 必须是压缩包格式 (zip, tar, tar.gz)' };
+        }
+        if (file.size > 2 * 1024 * 1024 * 1024) { // 2GB
+          return { isValid: false, message: 'model 文件大小不能超过2GB' };
+        }
+        break;
+      case 'examples':
+        const exampleExtensions = ['.zip', '.tar', '.tar.gz', '.tgz'];
+        const isValidExample = exampleExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
+        if (!isValidExample) {
+          return { isValid: false, message: 'examples 必须是压缩包格式 (zip, tar, tar.gz)' };
+        }
+        if (file.size > 100 * 1024 * 1024) { // 100MB
+          return { isValid: false, message: 'examples 文件大小不能超过100MB' };
+        }
+        break;
+    }
+    return { isValid: true };
+  }
+
+  function setFile(fileType, file) {
+    switch (fileType) {
+      case 'mcJson':
+        mcJsonFile = file;
+        break;
+      case 'gogogo':
+        gogogoFile = file;
+        break;
+      case 'model':
+        modelFile = file;
+        break;
+      case 'examples':
+        examplesFile = file;
+        break;
+    }
+  }
+
+  function removeFile(fileType) {
+    setFile(fileType, null);
+    // Reset corresponding file input
+    switch (fileType) {
+      case 'mcJson':
+        if (mcJsonFileRef) mcJsonFileRef.value = '';
+        break;
+      case 'gogogo':
+        if (gogogoFileRef) gogogoFileRef.value = '';
+        break;
+      case 'model':
+        if (modelFileRef) modelFileRef.value = '';
+        break;
+      case 'examples':
+        if (examplesFileRef) examplesFileRef.value = '';
+        break;
+    }
+  }
+
+  function formatFileSize(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
+  // Drag and drop handlers
+  function createDragHandlers(fileType) {
+    return {
+      handleDragEnter: (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDragState(fileType, true);
+      },
+      handleDragLeave: (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const rect = e.currentTarget.getBoundingClientRect();
+        const x = e.clientX;
+        const y = e.clientY;
+        
+        if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+          setDragState(fileType, false);
+        }
+      },
+      handleDragOver: (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      },
+      handleDrop: (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDragState(fileType, false);
+        
+        const files = Array.from(e.dataTransfer.files);
+        if (files.length > 0) {
+          const file = files[0];
+          const validationResult = validateFile(file, fileType);
+          if (!validationResult.isValid) {
+            alert(validationResult.message);
+            return;
+          }
+          setFile(fileType, file);
+        }
+      }
+    };
+  }
+
+  function setDragState(fileType, isDragging) {
+    switch (fileType) {
+      case 'mcJson':
+        isDragOverMcJson = isDragging;
+        break;
+      case 'gogogo':
+        isDragOverGogogo = isDragging;
+        break;
+      case 'model':
+        isDragOverModel = isDragging;
+        break;
+      case 'examples':
+        isDragOverExamples = isDragging;
+        break;
+    }
+  }
+
+  function getDragState(fileType) {
+    switch (fileType) {
+      case 'mcJson':
+        return isDragOverMcJson;
+      case 'gogogo':
+        return isDragOverGogogo;
+      case 'model':
+        return isDragOverModel;
+      case 'examples':
+        return isDragOverExamples;
+      default:
+        return false;
+    }
+  }
+
+  function getFile(fileType) {
+    switch (fileType) {
+      case 'mcJson':
+        return mcJsonFile;
+      case 'gogogo':
+        return gogogoFile;
+      case 'model':
+        return modelFile;
+      case 'examples':
+        return examplesFile;
+      default:
+        return null;
+    }
+  }
+
+  function getFileRef(fileType) {
+    switch (fileType) {
+      case 'mcJson':
+        return mcJsonFileRef;
+      case 'gogogo':
+        return gogogoFileRef;
+      case 'model':
+        return modelFileRef;
+      case 'examples':
+        return examplesFileRef;
+      default:
+        return null;
+    }
+  }
 </script>
 
 <svelte:window on:keydown={handleKeydown} />
 
 {#if isOpen}
-  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+  <!-- Backdrop with blur effect -->
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <!-- Modal Container -->
+    <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden border border-gray-200 dark:border-gray-700">
       <!-- Header -->
-      <div class="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
-          服务设置 - {service.service_name}
-        </h3>
+      <div class="relative bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-700 px-6 py-4 border-b border-gray-200 dark:border-gray-600">
+        <div class="flex items-center space-x-3">
+          <div class="flex items-center justify-center w-10 h-10 bg-blue-100 dark:bg-blue-900 rounded-xl">
+            <Settings class="w-5 h-5 text-blue-600 dark:text-blue-400" />
+          </div>
+          <div>
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white">
+              服务设置
+            </h3>
+            <p class="text-sm text-gray-600 dark:text-gray-300 mt-1">
+              配置资源和更新服务文件 - {service?.service_name}
+            </p>
+          </div>
+        </div>
         <button
-          class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+          class="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-all duration-200"
           on:click={handleClose}
           disabled={loading}
         >
@@ -173,289 +400,285 @@
 
       <!-- Form -->
       <form on:submit|preventDefault={handleSave}>
-        <div class="p-6 space-y-6">
-          <!-- Basic Settings -->
-          <div>
-            <h4 class="text-md font-medium text-gray-900 dark:text-white mb-4">基本设置</h4>
-            
-            <div class="space-y-4">
-              <!-- Service Name -->
-              <div>
-                <label for="service_name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  服务名称 *
-                </label>
-                <input
-                  type="text"
-                  id="service_name"
-                  bind:value={formData.service_name}
-                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white {errors.service_name ? 'border-red-500' : ''}"
-                  disabled={loading}
-                  required
-                />
-                {#if errors.service_name}
-                  <p class="mt-1 text-sm text-red-600 dark:text-red-400 flex items-center space-x-1">
-                    <AlertCircle class="w-4 h-4" />
-                    <span>{errors.service_name}</span>
-                  </p>
-                {/if}
-              </div>
-
-              <!-- Description -->
-              <div>
-                <label for="description" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  服务描述
-                </label>
-                <textarea
-                  id="description"
-                  bind:value={formData.description}
-                  rows="3"
-                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                  disabled={loading}
-                ></textarea>
-              </div>
-
-              <!-- Public Access -->
-              <div class="flex items-center space-x-3">
-                <input
-                  type="checkbox"
-                  id="is_public"
-                  bind:checked={formData.is_public}
-                  class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  disabled={loading}
-                />
-                <label for="is_public" class="text-sm text-gray-700 dark:text-gray-300">
-                  公开访问（允许任何人使用此服务）
-                </label>
-              </div>
-            </div>
-          </div>
-
-          <!-- Resource Configuration -->
-          <div>
-            <h4 class="text-md font-medium text-gray-900 dark:text-white mb-4">资源配置</h4>
-            
-            <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
-              <div class="flex items-start space-x-2">
-                <Info class="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" />
-                <div class="text-sm text-blue-800 dark:text-blue-200">
-                  <p class="font-medium mb-1">注意</p>
-                  <p>修改资源配置需要重启服务才能生效。建议在服务停止时进行修改。</p>
+        <div class="overflow-y-auto max-h-[calc(90vh-140px)]">
+          <div class="p-6 space-y-6">
+            <!-- Resource Configuration Section -->
+            <div class="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+              <div class="flex items-center space-x-2 mb-4">
+                <div class="flex items-center justify-center w-8 h-8 bg-purple-100 dark:bg-purple-900 rounded-lg">
+                  <Settings class="w-4 h-4 text-purple-600 dark:text-purple-400" />
                 </div>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-2 gap-4">
-              <!-- CPU Limit -->
-              <div>
-                <label for="cpu_limit" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  CPU限制 *
-                </label>
-                <div class="space-y-2">
-                  <input
-                    type="text"
-                    id="cpu_limit"
-                    bind:value={formData.cpu_limit}
-                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white {errors.cpu_limit ? 'border-red-500' : ''}"
-                    disabled={loading}
-                    required
-                  />
-                  <div class="flex flex-wrap gap-1">
-                    {#each cpuPresets as preset}
-                      <button
-                        type="button"
-                        class="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded transition-colors"
-                        on:click={() => formData.cpu_limit = preset.value}
-                        disabled={loading}
-                      >
-                        {preset.label}
-                      </button>
-                    {/each}
-                  </div>
-                </div>
-                {#if errors.cpu_limit}
-                  <p class="mt-1 text-sm text-red-600 dark:text-red-400 flex items-center space-x-1">
-                    <AlertCircle class="w-4 h-4" />
-                    <span>{errors.cpu_limit}</span>
-                  </p>
-                {/if}
+                <h4 class="text-lg font-semibold text-gray-900 dark:text-white">资源配置</h4>
               </div>
 
-              <!-- Memory Limit -->
-              <div>
-                <label for="memory_limit" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  内存限制 *
-                </label>
-                <div class="space-y-2">
-                  <input
-                    type="text"
-                    id="memory_limit"
-                    bind:value={formData.memory_limit}
-                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white {errors.memory_limit ? 'border-red-500' : ''}"
-                    disabled={loading}
-                    required
-                  />
-                  <div class="flex flex-wrap gap-1">
-                    {#each memoryPresets as preset}
-                      <button
-                        type="button"
-                        class="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded transition-colors"
-                        on:click={() => formData.memory_limit = preset.value}
-                        disabled={loading}
-                      >
-                        {preset.label}
-                      </button>
-                    {/each}
-                  </div>
-                </div>
-                {#if errors.memory_limit}
-                  <p class="mt-1 text-sm text-red-600 dark:text-red-400 flex items-center space-x-1">
-                    <AlertCircle class="w-4 h-4" />
-                    <span>{errors.memory_limit}</span>
-                  </p>
-                {/if}
-              </div>
-            </div>
-          </div>
-
-          <!-- Access Token -->
-          <div>
-            <h4 class="text-md font-medium text-gray-900 dark:text-white mb-4">访问令牌</h4>
-            
-            <div class="space-y-4">
-              <div>
-                <label for="access_token" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  当前访问令牌
-                </label>
-                <div class="flex space-x-2">
-                  <div class="flex-1 relative">
-                    <input
-                      type={showAccessToken ? 'text' : 'password'}
-                      id="access_token"
-                      value={formData.access_token || ''}
-                      class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                      readonly
-                    />
-                    <button
-                      type="button"
-                      class="absolute inset-y-0 right-0 pr-3 flex items-center"
-                      on:click={() => showAccessToken = !showAccessToken}
-                    >
-                      <svelte:component 
-                        this={showAccessToken ? EyeOff : Eye} 
-                        class="w-4 h-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                      />
-                    </button>
-                  </div>
-                  
-                  <button
-                    type="button"
-                    class="px-3 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-md transition-colors"
-                    on:click={copyAccessToken}
-                    disabled={!formData.access_token}
-                  >
-                    复制
-                  </button>
-                  
-                  <button
-                    type="button"
-                    class="px-3 py-2 bg-blue-100 hover:bg-blue-200 dark:bg-blue-900 dark:hover:bg-blue-800 text-blue-700 dark:text-blue-300 text-sm font-medium rounded-md transition-colors flex items-center space-x-1"
-                    on:click={handleRegenerateToken}
-                    disabled={regeneratingToken}
-                  >
-                    <RefreshCw class="w-4 h-4 {regeneratingToken ? 'animate-spin' : ''}" />
-                    <span>{regeneratingToken ? '生成中...' : '重新生成'}</span>
-                  </button>
-                </div>
-                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  访问令牌用于API调用和服务访问认证
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Service Information (Read-only) -->
-          <div>
-            <h4 class="text-md font-medium text-gray-900 dark:text-white mb-4">服务信息</h4>
-            
-            <div class="grid grid-cols-2 gap-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-              <div>
-                <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
-                  模型ID
-                </label>
-                <p class="text-sm text-gray-900 dark:text-white">{service.model_id}</p>
-              </div>
-              
-              <div>
-                <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
-                  模型服务器IP
-                </label>
-                <p class="text-sm text-gray-900 dark:text-white">{service.model_ip}</p>
-              </div>
-              
-              {#if service.gradio_port}
+              <div class="space-y-4">
+                <!-- Resource Configuration Presets -->
                 <div>
-                  <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
-                    分配端口
+                  <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                    资源配置 <span class="text-red-500">*</span>
                   </label>
-                  <p class="text-sm text-gray-900 dark:text-white">{service.gradio_port}</p>
+                  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {#each Object.entries(resourceConfigs) as [key, config]}
+                      <label class="relative">
+                        <input
+                          type="radio"
+                          name="resource_config"
+                          value={key}
+                          bind:group={formData.resource_config}
+                          on:change={handleResourceConfigChange}
+                          class="sr-only"
+                          disabled={loading}
+                        />
+                        <div class="flex flex-col p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 hover:shadow-md {formData.resource_config === key ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'}">
+                          <div class="flex items-center justify-between mb-2">
+                            <span class="font-medium text-sm text-gray-900 dark:text-white">{config.label}</span>
+                            {#if key === 'recommended'}
+                              <span class="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 px-2 py-1 rounded-full">推荐</span>
+                            {/if}
+                          </div>
+                          <div class="flex items-center space-x-3 text-xs text-gray-600 dark:text-gray-400">
+                            <div class="flex items-center space-x-1">
+                              <Cpu class="w-3 h-3" />
+                              <span>{config.cpu}</span>
+                            </div>
+                            <div class="flex items-center space-x-1">
+                              <HardDrive class="w-3 h-3" />
+                              <span>{config.memory}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </label>
+                    {/each}
+                  </div>
+                  <div class="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 mt-3">
+                    <p class="text-sm text-blue-800 dark:text-blue-200 flex items-center space-x-2">
+                      <Info class="w-4 h-4" />
+                      <span>当前配置：CPU {formData.cpu_limit} cores，内存 {formData.memory_limit}</span>
+                    </p>
+                  </div>
                 </div>
-              {/if}
-              
-              <div>
-                <label class="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">
-                  启动优先级
-                </label>
-                <p class="text-sm text-gray-900 dark:text-white">{service.priority}</p>
+
+                <!-- Public Access -->
+                <div class="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg p-4 border border-green-200 dark:border-green-700">
+                  <div class="flex items-start space-x-3">
+                    <input
+                      type="checkbox"
+                      id="is_public"
+                      bind:checked={formData.is_public}
+                      class="mt-1 h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded transition-colors"
+                      disabled={loading}
+                    />
+                    <div class="flex-1">
+                      <label for="is_public" class="block text-sm font-medium text-gray-900 dark:text-white">
+                        <div class="flex items-center space-x-2">
+                          <Shield class="w-4 h-4 text-green-600 dark:text-green-400" />
+                          <span>公开访问</span>
+                        </div>
+                      </label>
+                      <p class="text-xs text-gray-600 dark:text-gray-400">
+                        允许任何人访问和使用此服务
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
 
-          <!-- Danger Zone -->
-          <div class="border-t border-gray-200 dark:border-gray-700 pt-6">
-            <h4 class="text-md font-medium text-red-600 dark:text-red-400 mb-4">危险操作</h4>
-            
-            <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-              <div class="flex justify-between items-center">
-                <div>
-                  <h5 class="text-sm font-medium text-red-800 dark:text-red-200">删除服务</h5>
-                  <p class="mt-1 text-sm text-red-700 dark:text-red-300">
-                    一旦删除，服务的所有数据和配置将永久丢失，无法恢复
-                  </p>
+            <!-- File Modification Section -->
+            <div class="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+              <div class="flex items-center space-x-2 mb-4">
+                <div class="flex items-center justify-center w-8 h-8 bg-orange-100 dark:bg-orange-900 rounded-lg">
+                  <Upload class="w-4 h-4 text-orange-600 dark:text-orange-400" />
                 </div>
-                <button
-                  type="button"
-                  class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-md transition-colors flex items-center space-x-1"
-                  on:click={handleDelete}
-                  disabled={loading}
-                >
-                  <Trash2 class="w-4 h-4" />
-                  <span>删除服务</span>
-                </button>
+                <h4 class="text-lg font-semibold text-gray-900 dark:text-white">文件更新</h4>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- mc.json Upload -->
+                {#each [
+                  { type: 'mcJson', title: 'mc.json', subtitle: '模型配置文件', icon: FileText, ref: mcJsonFileRef, accept: '.json' },
+                  { type: 'gogogo', title: 'gogogo.py', subtitle: '服务启动脚本', icon: FileText, ref: gogogoFileRef, accept: '.py' },
+                  { type: 'model', title: 'model', subtitle: '模型文件压缩包', icon: Package, ref: modelFileRef, accept: '.zip,.tar,.tar.gz,.tgz' },
+                  { type: 'examples', title: 'examples', subtitle: '示例数据压缩包', icon: FolderOpen, ref: examplesFileRef, accept: '.zip,.tar,.tar.gz,.tgz' }
+                ] as fileConfig}
+                  <div class="space-y-2">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {fileConfig.title}
+                    </label>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">{fileConfig.subtitle}</p>
+                    
+                    {#if getFile(fileConfig.type)}
+                      <!-- File selected -->
+                      <div class="bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg p-3">
+                        <div class="flex items-center justify-between">
+                          <div class="flex items-center">
+                            <div class="flex-shrink-0 w-8 h-8 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center mr-3">
+                              <svelte:component this={fileConfig.icon} class="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                            </div>
+                            <div>
+                              <p class="text-sm font-medium text-gray-900 dark:text-white">{getFile(fileConfig.type).name}</p>
+                              <p class="text-xs text-gray-500 dark:text-gray-400">{formatFileSize(getFile(fileConfig.type).size)}</p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            on:click={() => removeFile(fileConfig.type)}
+                            class="text-red-500 hover:text-red-700 text-sm font-medium"
+                            disabled={loading}
+                          >
+                            移除
+                          </button>
+                        </div>
+                      </div>
+                    {:else}
+                      <!-- File selector with drag-and-drop -->
+                      <div 
+                        class="border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer {getDragState(fileConfig.type) ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'}"
+                        on:click={() => getFileRef(fileConfig.type)?.click()}
+                        on:dragenter={createDragHandlers(fileConfig.type).handleDragEnter}
+                        on:dragleave={createDragHandlers(fileConfig.type).handleDragLeave}
+                        on:dragover={createDragHandlers(fileConfig.type).handleDragOver}
+                        on:drop={createDragHandlers(fileConfig.type).handleDrop}
+                      >
+                        <input
+                          type="file"
+                          accept={fileConfig.accept}
+                          on:change={(e) => handleFileSelect(e, fileConfig.type)}
+                          bind:this={fileConfig.ref}
+                          class="hidden"
+                          disabled={loading}
+                        />
+                        <svelte:component this={fileConfig.icon} class="mx-auto h-8 w-8 text-gray-400 dark:text-gray-500 mb-2" />
+                        <button
+                          type="button"
+                          on:click={() => getFileRef(fileConfig.type)?.click()}
+                          class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium text-sm"
+                          disabled={loading}
+                        >
+                          {getDragState(fileConfig.type) ? '释放文件到此处' : `点击选择或拖拽${fileConfig.title}文件`}
+                        </button>
+                      </div>
+                    {/if}
+                  </div>
+                {/each}
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Footer -->
-        <div class="flex justify-end space-x-3 p-6 border-t border-gray-200 dark:border-gray-700">
-          <button
-            type="button"
-            class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-500 rounded-md transition-colors"
-            on:click={handleClose}
-            disabled={loading}
-          >
-            取消
-          </button>
-          <button
-            type="submit"
-            class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-md transition-colors flex items-center space-x-1"
-            disabled={loading}
-          >
-            <Save class="w-4 h-4" />
-            <span>{loading ? '保存中...' : '保存更改'}</span>
-          </button>
+        <!-- Sticky Footer -->
+        <div class="sticky bottom-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 px-6 py-4">
+          <div class="flex items-center justify-between">
+            <div class="text-sm text-gray-500 dark:text-gray-400">
+              {#if loading}
+                <div class="flex items-center space-x-2">
+                  <div class="animate-spin w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                  <span>正在保存设置...</span>
+                </div>
+              {:else}
+                配置资源选项和更新文件
+              {/if}
+            </div>
+            <div class="flex space-x-3">
+              <button
+                type="button"
+                class="px-6 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-500 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                on:click={handleClose}
+                disabled={loading}
+              >
+                取消
+              </button>
+              <button
+                type="submit"
+                class="px-6 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98]"
+                disabled={loading}
+              >
+                {#if loading}
+                  <div class="flex items-center space-x-2">
+                    <div class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
+                    <span>保存中...</span>
+                  </div>
+                {:else}
+                  <div class="flex items-center space-x-2">
+                    <Save class="w-4 h-4" />
+                    <span>保存设置</span>
+                  </div>
+                {/if}
+              </button>
+            </div>
+          </div>
         </div>
       </form>
     </div>
   </div>
 {/if}
+
+<style>
+  /* Custom animations and transitions */
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(-10px) scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  /* Modal enter animation */
+  .fixed.inset-0 {
+    animation: fadeIn 0.2s ease-out;
+  }
+
+  .fixed.inset-0 > div {
+    animation: slideIn 0.3s ease-out;
+  }
+
+  /* Custom radio button styles */
+  input[type="radio"]:checked + div {
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+  }
+
+  /* Custom checkbox styles */
+  input[type="checkbox"]:indeterminate {
+    background-color: #3b82f6;
+    border-color: #3b82f6;
+  }
+
+  /* Scrollbar styling for better UX */
+  .overflow-y-auto::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .overflow-y-auto::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .overflow-y-auto::-webkit-scrollbar-thumb {
+    background: rgba(156, 163, 175, 0.5);
+    border-radius: 3px;
+  }
+
+  .overflow-y-auto::-webkit-scrollbar-thumb:hover {
+    background: rgba(156, 163, 175, 0.7);
+  }
+
+  /* Dark mode scrollbar */
+  .dark .overflow-y-auto::-webkit-scrollbar-thumb {
+    background: rgba(75, 85, 99, 0.5);
+  }
+
+  .dark .overflow-y-auto::-webkit-scrollbar-thumb:hover {
+    background: rgba(75, 85, 99, 0.7);
+  }
+</style>

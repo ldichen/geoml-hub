@@ -41,7 +41,7 @@
       accept: '.zip,.tar,.tar.gz,.tgz',
       label: '示例数据',
       description: '示例数据目录压缩包 (支持zip, tar, tar.gz)',
-      maxSize: 100 * 1024 * 1024 // 100MB
+      maxSize: 10 * 1024 * 1024 * 1024 // 10GB
     }
   };
   

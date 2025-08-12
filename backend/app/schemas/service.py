@@ -9,8 +9,20 @@
 
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, field_serializer
 from enum import Enum
+
+
+class ServiceImageResponse(BaseModel):
+    """服务关联镜像的简化响应模式"""
+    id: int
+    original_name: str
+    original_tag: str
+    description: Optional[str] = None
+    status: str
+    
+    class Config:
+        from_attributes = True
 
 
 class ServiceStatus(str, Enum):
@@ -140,6 +152,7 @@ class ServiceResponse(ServiceBase):
     id: int
     repository_id: int
     user_id: int
+    image_id: Optional[int] = None  # 镜像ID
     status: ServiceStatus
     gradio_port: Optional[int] = None
     service_url: Optional[str] = None
@@ -163,6 +176,10 @@ class ServiceResponse(ServiceBase):
     last_started_at: Optional[datetime] = None
     last_stopped_at: Optional[datetime] = None
     last_health_check: Optional[datetime] = None
+
+    # 关联的镜像对象（通过relationships加载）
+    image: Optional[Dict[str, Any]] = None
+
 
     class Config:
         from_attributes = True

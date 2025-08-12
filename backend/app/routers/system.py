@@ -74,7 +74,7 @@ async def get_system_config(
             ),
             SystemConfig(
                 key="max_file_size",
-                value=100 * 1024 * 1024,  # 100MB
+                value=10 * 1024 * 1024 * 1024,  # 10GB
                 description="最大文件上传大小（字节）",
                 type="integer",
                 category="general",

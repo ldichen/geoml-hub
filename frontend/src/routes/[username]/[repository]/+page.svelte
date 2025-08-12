@@ -190,6 +190,14 @@
       console.log('Files response:', filesResponse);
       console.log('Services response:', servicesResponse);
       console.log('Services data:', services);
+      
+      // 调试：检查服务的镜像数据
+      if (services && services.length > 0) {
+        console.log('First service:', services[0]);
+        console.log('First service image:', services[0].image);
+        console.log('First service model_id:', services[0].model_id);
+        console.log('First service image_id:', services[0].image_id);
+      }
 
       // Load current user if authenticated
       const token = api.getToken();
@@ -296,7 +304,7 @@
   function getServiceStatusText(status) {
     switch (status) {
       case 'running':
-        return '运行中';
+        return 'Running';
       case 'starting':
         return '启动中';
       case 'stopping':
@@ -318,6 +326,35 @@
         return '重试次数已耗尽';
       default:
         return '未知';
+    }
+  }
+
+  // 获取服务卡片渐变背景
+  function getServiceGradient(index) {
+    const gradients = [
+      'from-blue-500 via-cyan-500 to-teal-500',  // Blue to teal gradient
+      'from-purple-500 via-pink-500 to-rose-500', // Purple to rose gradient  
+      'from-orange-500 via-amber-500 to-yellow-500', // Orange to yellow gradient
+      'from-emerald-500 via-green-500 to-lime-500', // Green gradient
+      'from-indigo-500 via-purple-500 to-pink-500', // Indigo to pink gradient
+      'from-red-500 via-pink-500 to-purple-500' // Red to purple gradient
+    ];
+    return gradients[index % gradients.length];
+  }
+
+  // 跳转到服务demo页面
+  function handleServiceClick(service) {
+    if (service.status !== 'running') return;
+    
+    if (service.service_url) {
+      // 如果有service_url，直接跳转
+      window.open(service.service_url, '_blank');
+    } else if (service.gradio_port) {
+      // 如果有gradio_port，构建URL
+      const demoUrl = `http://${service.model_ip}:${service.gradio_port}`;
+      window.open(demoUrl, '_blank');
+    } else {
+      console.warn('Service has no accessible URL:', service);
     }
   }
 
@@ -820,24 +857,32 @@
     }
   }
 
-  // Service management functions
+  // Service management functions  
+  let serviceCreationProgress = 0;
+
   async function handleCreateService(event) {
     try {
       serviceModalLoading = true;
+      serviceCreationProgress = 0;
       
       const { type, data } = event.detail;
       
       let response;
       if (type === 'docker-upload') {
-        // 为Docker tar包上传，使用专门的端点
-        response = await api.createServiceWithDockerTar(username, repoName, data);
+        // 为Docker tar包上传，使用专门的端点，支持进度条
+        response = await api.createServiceWithDockerTar(username, repoName, data, (progress) => {
+          serviceCreationProgress = progress;
+        });
       } else if (type === 'existing-image') {
-        // 基于已有镜像创建服务，使用标准API
-        response = await api.createService(username, repoName, data);
+        // 基于已有镜像创建服务，使用标准API，支持进度条
+        response = await api.createService(username, repoName, data, (progress) => {
+          serviceCreationProgress = progress;
+        });
       } else {
         throw new Error(`未知的服务创建类型: ${type}`);
       }
       
+      serviceCreationProgress = 100;
       showCreateServiceModal = false;
       await loadRepositoryData(); // 重新加载数据
       showNotification('服务创建成功', 'success');
@@ -1403,50 +1448,62 @@
                         {/if}
                       </div>
                     {:else}
-                      <!-- Show first 3 services -->
+                      <!-- Show first 3 running services -->
                       <div class="space-y-3">
-                        {#each services.slice(0, 3) as service}
-                          <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-3">
-                            <div class="flex items-center justify-between mb-2">
-                              <div class="flex items-center space-x-2">
-                                <div class="w-6 h-6 bg-blue-100 dark:bg-blue-900 rounded flex items-center justify-center">
-                                  <svg class="w-3 h-3 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                                  </svg>
+                        {#each services.filter(service => service.status === 'running').slice(0, 3) as service, index}
+                          <div class="relative overflow-hidden rounded-xl p-2 bg-gradient-to-br {getServiceGradient(index)} shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer transform hover:scale-[1.02]" on:click={() => handleServiceClick(service)}>
+                            <!-- Three-row flex layout -->
+                            <div class="relative flex flex-col h-full">
+                              <!-- Dark overlay for better text contrast -->
+                              
+                              <div class="relative z-10 flex flex-col justify-between h-full">
+
+                                <!-- Second row: Model information -->
+                                <div class="flex flex-col px-2 rounded-lg backdrop-blur-sm">
+                                  <div class="flex items-center space-x-3">
+                                    <div class="flex-shrink-0 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-lg shadow-sm flex items-center justify-center">
+                                      <svg class="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                                      </svg>
+                                    </div>
+                                    <div class="flex-1">
+                                      <h4 class="text-lg font-bold text-white drop-shadow-md">
+                                        {service.service_name}
+                                      </h4>
+                                   <!-- Used model -->
+                                  <div class="flex items-center space-x-2">
+                                    <span class="text-white/80 text-sm font-medium">Model:</span>
+                                    <div class="flex items-center space-x-2">
+                                      <span class="text-white font-semibold text-sm drop-shadow-sm">
+                                        {service.image ? `${service.image.original_name}:${service.image.original_tag}` : service.model_id || 'Unknown'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                    </div>
+                                  </div>
+                                  <!-- Model description -->
+                                  <div class="flex items-start space-x-2">
+                                    <span class="text-white/95 text-sm drop-shadow-sm">
+                                      {service.description || 'Machine learning model service'}
+                                    </span>
+                                  </div>
+                                  
+
                                 </div>
-                                <div class="min-w-0 flex-1">
-                                  <h4 class="text-sm font-medium text-gray-900 dark:text-white truncate">
-                                    {service.service_name}
-                                  </h4>
-                                </div>
+
+                               
                               </div>
-                              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium {getServiceStatusColor(service.status)}">
-                                {getServiceStatusText(service.status)}
-                              </span>
-                            </div>
-                            
-                            <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                              <span>Model: {service.model_id}</span>
-                              {#if service.status === 'running'}
-                                <a
-                                  href={service.service_url}
-                                  target="_blank"
-                                  class="text-blue-600 dark:text-blue-400 hover:underline"
-                                >
-                                  Try Demo
-                                </a>
-                              {/if}
                             </div>
                           </div>
                         {/each}
                         
-                        {#if services.length > 3}
+                        {#if services.filter(service => service.status === 'running').length > 3}
                           <div class="text-center pt-2">
                             <button
                               class="text-sm text-blue-600 dark:text-blue-400 hover:underline"
                               on:click={() => activeTab = 'services'}
                             >
-                              View {services.length - 3} more services
+                              View {services.filter(service => service.status === 'running').length - 3} more running services
                             </button>
                           </div>
                         {/if}
@@ -1474,7 +1531,7 @@
                         {isDragOver ? '释放文件到此处' : '拖拽文件到此处或点击选择文件'}
                       </p>
                       <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        支持文件和文件夹上传，单个文件最大 100MB
+                        支持文件和文件夹上传，单个文件最大 10GB
                       </p>
                     </div>
                     
@@ -1873,6 +1930,7 @@
 <ServiceCreateModal
   isOpen={showCreateServiceModal}
   loading={serviceModalLoading}
+  progress={serviceCreationProgress}
   availableImages={availableImages}
   on:create={handleCreateService}
   on:close={() => showCreateServiceModal = false}

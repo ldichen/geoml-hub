@@ -7,14 +7,11 @@ import aiohttp
 import asyncio
 import re
 import ssl
-import shutil
-import tempfile
 from typing import Dict, List, Optional, BinaryIO, Any
-from pathlib import Path
-from datetime import datetime
 
 from app.config import settings
 from app.utils.logger import logger
+from app.utils.skopeo_pusher import SkopeoPusher
 
 
 class HarborClient:
@@ -25,7 +22,6 @@ class HarborClient:
         self.username = settings.harbor_username
         self.password = settings.harbor_password
         self.session = None
-        self._login_cache = {}  # Docker登录状态缓存
 
     async def __aenter__(self):
         """异步上下文管理器入口"""
@@ -117,12 +113,13 @@ class HarborClient:
         except Exception as e:
             logger.warning(f"创建Harbor项目失败，可能已存在: {e}")
 
-        # 2. 使用优化的流式上传处理
-        return await self._optimized_push_from_tar(
+        # 2. 使用Skopeo直推（唯一推送方式）
+        logger.info(f"使用Skopeo直推: {project_name}/{repository_name}:{tag}")
+        return await self.skopeo_push_image_from_tar(
             project_name, repository_name, tag, tar_file, progress_callback
         )
 
-    async def _optimized_push_from_tar(
+    async def skopeo_push_image_from_tar(
         self,
         project_name: str,
         repository_name: str,
@@ -130,372 +127,70 @@ class HarborClient:
         tar_file: BinaryIO,
         progress_callback=None,
     ) -> Dict:
-        """优化的tar包推送实现"""
-
-        temp_dir = None
-        tar_path = None
-
+        """
+        Skopeo直推方法 - 跳过Docker daemon，使用skopeo直接推送到Harbor
+        高性能原生推送，稳定可靠
+        """
+        logger.info(f"使用Skopeo直推: {project_name}/{repository_name}:{tag}")
+        
         try:
-            # 创建临时目录（优先使用内存文件系统）
-            temp_dir = await self._create_optimized_temp_dir()
-            tar_path = temp_dir / f"{repository_name.replace('/', '_')}_{tag}.tar"
-
-            # 并行执行：流式写入文件 + Docker登录
-            write_task = asyncio.create_task(
-                self._streaming_write_tar(tar_file, tar_path, progress_callback)
+            # 创建Skopeo推送器
+            pusher = SkopeoPusher()
+            
+            # 检查skopeo可用性
+            if not await pusher.check_skopeo_available():
+                raise Exception("Skopeo不可用，请确保已安装skopeo")
+            
+            # 执行Skopeo推送
+            result = await pusher.push_from_tar(
+                tar_file=tar_file,
+                harbor_url=self.base_url,
+                username=self.username,
+                password=self.password,
+                project=project_name,
+                repository=repository_name,
+                tag=tag,
+                progress_callback=progress_callback
             )
-            login_task = asyncio.create_task(self._ensure_docker_login())
-
-            # 等待写入完成和登录完成
-            total_size, docker_login_done = await asyncio.gather(write_task, login_task)
-
-            if progress_callback:
-                await progress_callback(50, "processing")
-
-            logger.info(
-                f"文件写入完成: {total_size} bytes, Docker登录: {'成功' if docker_login_done else '失败'}"
-            )
-
-            if not docker_login_done:
-                raise Exception("Docker登录失败")
-
-            # 解析Harbor registry URL
-            harbor_host = self.base_url.split("://")[-1]
-            full_image_name = f"{harbor_host}/{project_name}/{repository_name}:{tag}"
-
-            # 并行执行Docker操作
-            load_task = asyncio.create_task(
-                self._docker_load_with_progress(tar_path, progress_callback, 60)
-            )
-
-            # 等待Docker load完成并获取镜像信息
-            image_info = await load_task
-
-            if progress_callback:
-                await progress_callback(75, "tagging")
-
-            # 标记和推送镜像
-            tag_push_result = await self._docker_tag_and_push(
-                image_info, full_image_name, progress_callback
-            )
-
-            if progress_callback:
-                await progress_callback(100, "completed")
-
-            return {
-                "status": "success",
-                "image": full_image_name,
-                "digest": tag_push_result.get("digest"),
-                "size": total_size,
-                "message": "镜像推送成功",
-            }
-
+            
+            # 转换结果格式以兼容现有接口
+            if result.get('status') == 'success':
+                return {
+                    'status': 'success',
+                    'image': result.get('image'),
+                    'message': result.get('message', '镜像推送成功（Skopeo直推）'),
+                    'method': 'skopeo_direct_push',
+                    'performance_improvement': result.get('performance_improvement', '高性能原生推送')
+                }
+            else:
+                raise Exception(result.get('message', 'Skopeo直推失败'))
+                
         except Exception as e:
-            logger.error(f"推送镜像失败: {e}")
-            raise
-        finally:
-            # 清理临时文件
-            await self._cleanup_temp_files(temp_dir, tar_path)
+            logger.error(f"Skopeo直推失败: {e}")
+            raise Exception(f"Skopeo直推失败: {str(e)}")
+    
+    async def direct_push_image_from_tar(
+        self,
+        project_name: str,
+        repository_name: str,
+        tag: str,
+        tar_file: BinaryIO,
+        progress_callback=None,
+    ) -> Dict:
+        """
+        直推方法 - 向后兼容，重定向到Skopeo实现
+        """
+        return await self.skopeo_push_image_from_tar(
+            project_name, repository_name, tag, tar_file, progress_callback
+        )
 
-    async def _create_optimized_temp_dir(self) -> Path:
-        """创建优化的临时目录（优先使用内存文件系统）"""
-        # 尝试使用内存文件系统（Linux/macOS）
-        memory_fs_paths = ["/dev/shm", "/tmp"]
 
-        for path in memory_fs_paths:
-            if Path(path).exists():
-                try:
-                    temp_dir = Path(tempfile.mkdtemp(dir=path, prefix="harbor_upload_"))
-                    logger.info(f"使用优化临时目录: {temp_dir}")
-                    return temp_dir
-                except Exception:
-                    continue
 
-        # 回退到默认临时目录
-        temp_dir = Path(tempfile.mkdtemp(prefix="harbor_upload_"))
-        logger.info(f"使用默认临时目录: {temp_dir}")
-        return temp_dir
 
-    async def _streaming_write_tar(
-        self, tar_file: BinaryIO, tar_path: Path, progress_callback=None
-    ) -> int:
-        """流式写入tar文件（大块读取，减少IO次数）"""
-        import time
 
-        chunk_size = 1024 * 1024  # 64KB chunks (优化后的块大小)
-        total_size = 0
-        MB = 1024 * 1024
-        STEP = 50 * MB  # 每 5MB 回调一次
-        SCALE = 1.0 / 50 * MB  # 1MB -> 2%
-        CALLBACK_MIN_DELTA = 1  # 至少增长 1% 才回调
-        CALLBACK_MIN_INTERVAL = 0.2  # 至少间隔 0.3s 才回调
 
-        last_segment = -1  # 上次已跨过的 5MB 段数（-1 表示尚未开始）
-        last_percent = -1  # 上次已回调的百分比
-        last_ts = 0.0  # 上次回调时间戳
-        try:
-            with open(tar_path, "wb", buffering=1024 * 1024) as f:  # 512KB缓冲区
-                while True:
-                    chunk = tar_file.read(chunk_size)
-                    if not chunk:
-                        break
-                    f.write(chunk)
-                    total_size += len(chunk)
 
-                    if progress_callback:
-                        # 当前总共跨过的 5MB 段数
-                        curr_segment = total_size // STEP
-                        if curr_segment > last_segment:
-                            # 一次性可能跨过多个 50MB 边界：对每个边界触发一次
-                            # 回调使用“边界处的字节数”来算百分比，保证稳定的 5MB 粒度
-                            for seg in range(last_segment + 1, curr_segment + 1):
-                                thresh_bytes = seg * STEP
-                                percent = min(int(thresh_bytes * SCALE), 45)
-                                # 双节流：时间 + 百分比增量
-                                now = time.time()
-                                if (percent >= last_percent + CALLBACK_MIN_DELTA) and (
-                                    now - last_ts >= CALLBACK_MIN_INTERVAL
-                                ):
-                                    await progress_callback(percent, "uploading")
-                                    last_percent = percent
-                                    last_ts = now
-                            last_segment = curr_segment
 
-                # 确保数据写入磁盘
-                f.flush()
-                # 正常收尾：若未到 45%，补到 45%
-            if progress_callback and last_percent < 45:
-                await progress_callback(45, "uploading")
-
-        except Exception as e:
-            logger.error(f"流式写入失败: {e}")
-            raise Exception(f"写入tar文件失败: {e}")
-
-        logger.info(f"流式写入完成: {total_size} bytes")
-        return total_size
-
-    async def _ensure_docker_login(self) -> bool:
-        """确保Docker登录（带重试和连接复用）"""
-        harbor_host = self.base_url.split("://")[-1]
-
-        # 检查缓存的登录状态
-        if self._login_cache.get(harbor_host, False):
-            logger.debug("使用缓存的Docker登录状态")
-            return True
-
-        # 执行登录（带重试）
-        max_retries = 2
-        for attempt in range(max_retries):
-            try:
-                login_cmd = f"echo '{self.password}' | docker login {harbor_host} -u {self.username} --password-stdin"
-                process = await asyncio.create_subprocess_shell(
-                    login_cmd,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-                stdout, stderr = await process.communicate()
-
-                if process.returncode == 0:
-                    logger.info("Docker登录Harbor成功")
-                    self._login_cache[harbor_host] = True  # 缓存登录状态
-                    return True
-                else:
-                    error_msg = stderr.decode()
-                    logger.warning(
-                        f"Docker登录失败 (尝试 {attempt + 1}/{max_retries}): {error_msg}"
-                    )
-
-                    if attempt == max_retries - 1:
-                        raise Exception(f"Docker登录失败: {error_msg}")
-
-            except Exception as e:
-                if attempt == max_retries - 1:
-                    logger.error(f"Docker登录异常: {e}")
-                    return False
-                await asyncio.sleep(1)  # 重试前等待
-
-        return False
-
-    async def _docker_load_with_progress(
-        self, tar_path: Path, progress_callback=None, start_progress: int = 60
-    ) -> Dict[str, str]:
-        """执行Docker load操作并返回镜像信息"""
-        try:
-            if progress_callback:
-                await progress_callback(start_progress, "loading")
-
-            load_cmd = f"docker load -i '{tar_path}'"
-            process = await asyncio.create_subprocess_shell(
-                load_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await process.communicate()
-
-            if process.returncode != 0:
-                raise Exception(f"Docker load失败: {stderr.decode()}")
-
-            # 解析Docker load输出
-            loaded_output = stdout.decode()
-            logger.info(f"Docker load输出: {loaded_output}")
-
-            # 提取镜像ID或名称
-            image_id = None
-            for line in loaded_output.split("\n"):
-                if "Loaded image:" in line:
-                    image_id = line.split("Loaded image:")[-1].strip()
-                    break
-                elif "Loaded image ID:" in line:
-                    image_id = line.split("Loaded image ID:")[-1].strip()
-                    break
-
-            if not image_id:
-                # 如果无法解析，使用最新的镜像
-                get_latest_cmd = (
-                    "docker images --format '{{.Repository}}:{{.Tag}}' | head -1"
-                )
-                process = await asyncio.create_subprocess_shell(
-                    get_latest_cmd,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-                stdout, stderr = await process.communicate()
-                if process.returncode == 0:
-                    image_id = stdout.decode().strip()
-
-            if not image_id:
-                raise Exception("无法确定加载的镜像ID")
-
-            logger.info(f"成功加载镜像: {image_id}")
-            return {"image_id": image_id, "loaded_output": loaded_output}
-
-        except Exception as e:
-            logger.error(f"Docker load失败: {e}")
-            raise
-
-    async def _docker_tag_and_push(
-        self, image_info: Dict[str, str], full_image_name: str, progress_callback=None
-    ) -> Dict[str, str]:
-        """标记和推送镜像"""
-        try:
-            image_id = image_info["image_id"]
-
-            # 标记镜像
-            tag_cmd = f"docker tag '{image_id}' '{full_image_name}'"
-            process = await asyncio.create_subprocess_shell(
-                tag_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-            )
-            _, stderr = await process.communicate()
-
-            if process.returncode != 0:
-                raise Exception(f"Docker tag失败: {stderr.decode()}")
-
-            if progress_callback:
-                await progress_callback(85, "pushing")
-
-            # 推送镜像
-            push_cmd = f"docker push '{full_image_name}'"
-            process = await asyncio.create_subprocess_shell(
-                push_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await process.communicate()
-
-            if process.returncode != 0:
-                raise Exception(f"Docker push失败: {stderr.decode()}")
-
-            if progress_callback:
-                await progress_callback(95, "verifying")
-
-            # 解析推送输出获取digest
-            push_output = stdout.decode()
-            logger.debug(f"Docker push输出: {push_output}")
-
-            # 从推送输出中提取digest
-            digest = None
-            for line in push_output.split("\n"):
-                if "digest:" in line.lower() and "sha256:" in line:
-                    # 格式类似: latest: digest: sha256:abcd1234... size: 1234
-                    parts = line.split("digest:")
-                    if len(parts) > 1:
-                        digest_part = (
-                            parts[1].strip().split()[0]
-                        )  # 取第一个空格前的部分
-                        if digest_part.startswith("sha256:"):
-                            digest = digest_part
-                            break
-
-            # 如果无法从Docker输出获取digest，尝试从Harbor API获取
-            if not digest:
-                digest = await self._get_image_digest_from_harbor(full_image_name)
-
-            # 清理本地镜像（可选）
-            cleanup_cmd = (
-                f"docker rmi '{image_id}' '{full_image_name}' 2>/dev/null || true"
-            )
-            await asyncio.create_subprocess_shell(
-                cleanup_cmd,
-                stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.DEVNULL,
-            )
-
-            logger.info(
-                f"成功推送镜像: {full_image_name}, digest: {digest or 'unknown'}"
-            )
-            return {
-                "digest": digest,
-                "status": "success",
-            }
-
-        except Exception as e:
-            logger.error(f"Docker tag和推送失败: {e}")
-            raise
-
-    async def _get_image_digest_from_harbor(
-        self, full_image_name: str
-    ) -> Optional[str]:
-        """从Harbor API获取镜像digest"""
-        try:
-            # 解析镜像名称：registry/project/repository:tag
-            parts = full_image_name.split("/")
-            if len(parts) >= 3:
-                project_name = parts[1]
-                repository_tag = parts[2]
-
-                if ":" in repository_tag:
-                    repository_name, tag = repository_tag.rsplit(":", 1)
-                else:
-                    repository_name, tag = repository_tag, "latest"
-
-                # 等待一下，让Harbor完成索引
-                await asyncio.sleep(2)
-
-                # 从Harbor API获取artifact信息
-                artifact_info = await self.get_artifact(
-                    project_name, repository_name, tag
-                )
-
-                if artifact_info and "digest" in artifact_info:
-                    logger.info(f"从Harbor API获取到digest: {artifact_info['digest']}")
-                    return artifact_info["digest"]
-                else:
-                    logger.warning(f"无法从Harbor API获取digest: {full_image_name}")
-
-        except Exception as e:
-            logger.error(f"从Harbor API获取digest失败: {e}")
-
-        return None
-
-    async def _cleanup_temp_files(self, temp_dir: Path = None, tar_path: Path = None):
-        """清理临时文件"""
-        try:
-            if tar_path and tar_path.exists():
-                tar_path.unlink()
-                logger.debug(f"清理临时tar文件: {tar_path}")
-
-            if temp_dir and temp_dir.exists():
-                shutil.rmtree(temp_dir)
-                logger.debug(f"清理临时目录: {temp_dir}")
-
-        except Exception as e:
-            logger.warning(f"清理临时文件失败: {e}")
 
     # ================== 工具方法 ==================
 

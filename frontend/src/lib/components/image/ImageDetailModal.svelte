@@ -286,14 +286,6 @@
 				<div>
 					<div class="flex items-center justify-between mb-4">
 						<h3 class="text-lg font-medium text-gray-900">关联服务</h3>
-						{#if canManage && image.status === 'ready' && image.can_create_service}
-							<button
-								class="btn btn-primary btn-sm"
-								on:click={handleCreateService}
-							>
-								创建服务
-							</button>
-						{/if}
 					</div>
 
 					{#if loadingServices}
@@ -398,17 +390,8 @@
 
 		<!-- 底部操作栏 -->
 		{#if canManage}
-			<div class="flex justify-between items-center p-6 border-t border-gray-200">
-				<div class="flex space-x-3">
-					{#if image.status === 'ready' && image.can_create_service}
-						<button
-							class="btn btn-primary"
-							on:click={handleCreateService}
-						>
-							创建服务
-						</button>
-					{/if}
-				</div>
+			<div class="flex justify-end items-center p-6 border-t border-gray-200">
+
 				
 				<button
 					class="btn btn-danger"

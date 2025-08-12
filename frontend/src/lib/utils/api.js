@@ -84,46 +84,111 @@ class ApiClient {
 		}
 	}
 
-	// Upload file helper
+	// Upload file helper with progress support
 	async uploadFile(endpoint, file, onProgress = null) {
 		const formData = new FormData();
 		formData.append('file', file);
+		return this.uploadFormData(endpoint, formData, onProgress);
+	}
 
-		const config = {
-			method: 'POST',
-			body: formData,
-			headers: {}
-		};
-
-		// Add authentication token if available
-		const token = this.getToken();
-		if (token) {
-			config.headers.Authorization = `Bearer ${token}`;
-		}
-
+	// Generic upload with progress support using XMLHttpRequest
+	async uploadFormData(endpoint, formData, onProgress = null) {
 		const url = `${this.baseUrl}${endpoint}`;
 
-		try {
-			const response = await fetch(url, config);
+		return new Promise((resolve, reject) => {
+			const xhr = new XMLHttpRequest();
 
-			if (response.status === 401) {
-				this.clearToken();
-				if (browser) {
-					goto('/login');
+			// Set up progress tracking
+			if (onProgress && typeof onProgress === 'function') {
+				xhr.upload.addEventListener('progress', (event) => {
+					if (event.lengthComputable) {
+						const progress = Math.round((event.loaded / event.total) * 100);
+						onProgress(progress);
+					}
+				});
+			}
+
+			// Set up response handling
+			xhr.onload = function () {
+				try {
+					if (xhr.status === 401) {
+						// Token expired or invalid, clear it and redirect to login
+						if (browser) {
+							localStorage.removeItem('authToken');
+							localStorage.removeItem('user');
+							goto('/login');
+						}
+						reject(new Error('Authentication required'));
+						return;
+					}
+
+					if (xhr.status >= 200 && xhr.status < 300) {
+						try {
+							const data = JSON.parse(xhr.responseText);
+							resolve({
+								success: true,
+								data: data,
+								status: xhr.status
+							});
+						} catch {
+							resolve({
+								success: true,
+								data: { content: xhr.responseText },
+								status: xhr.status
+							});
+						}
+					} else {
+						let errorData;
+						try {
+							errorData = JSON.parse(xhr.responseText);
+						} catch {
+							errorData = { message: xhr.statusText };
+						}
+
+						resolve({
+							success: false,
+							error: errorData?.detail || errorData?.message || `HTTP ${xhr.status}`,
+							status: xhr.status
+						});
+					}
+				} catch (error) {
+					resolve({
+						success: false,
+						error: error.message || '请求失败',
+						status: xhr.status
+					});
 				}
-				throw new Error('Authentication required');
+			};
+
+			xhr.onerror = function () {
+				resolve({
+					success: false,
+					error: '网络错误，请检查连接',
+					status: 0
+				});
+			};
+
+			xhr.ontimeout = function () {
+				resolve({
+					success: false,
+					error: '请求超时',
+					status: 0
+				});
+			};
+
+			// Set up request
+			xhr.open('POST', url);
+			xhr.timeout = 300000; // 5 minutes timeout
+
+			// Add authorization header if token exists
+			const token = this.getToken();
+			if (token) {
+				xhr.setRequestHeader('Authorization', `Bearer ${token}`);
 			}
 
-			if (!response.ok) {
-				const error = await response.json().catch(() => ({}));
-				throw new Error(error.message || `HTTP ${response.status}`);
-			}
-
-			return await response.json();
-		} catch (error) {
-			console.error('Upload failed:', error);
-			throw error;
-		}
+			// Send request
+			xhr.send(formData);
+		});
 	}
 
 	// ================== Authentication API ==================
@@ -429,18 +494,19 @@ class ApiClient {
 		return this.request(`/api/services/${owner}/${name}?${searchParams}`);
 	}
 
-	async createService(owner, name, data) {
+	async createService(owner, name, data, onProgress = null) {
+		// If it's FormData, use uploadFormData for progress support
+		if (data instanceof FormData) {
+			return this.uploadFormData(`/api/services/${owner}/${name}/create_service_from_image`, data, onProgress);
+		}
 		return this.request(`/api/services/${owner}/${name}/create_service_from_image`, {
 			method: 'POST',
 			body: data
 		});
 	}
 
-	async createServiceWithDockerTar(owner, name, formData) {
-		return this.request(`/api/services/${owner}/${name}/create_service_with_docker_tar`, {
-			method: 'POST',
-			body: formData
-		});
+	async createServiceWithDockerTar(owner, name, formData, onProgress = null) {
+		return this.uploadFormData(`/api/services/${owner}/${name}/create_service_with_docker_tar`, formData, onProgress);
 	}
 
 	async getService(serviceId) {
@@ -594,11 +660,8 @@ class ApiClient {
 		return this.request(`/api/images/repositories/${repositoryId}`);
 	}
 
-	async uploadImage(repositoryId, formData) {
-		return this.request(`/api/images/repositories/${repositoryId}/upload`, {
-			method: 'POST',
-			body: formData
-		});
+	async uploadImage(repositoryId, formData, onProgress = null) {
+		return this.uploadFormData(`/api/images/repositories/${repositoryId}/upload`, formData, onProgress);
 	}
 
 	async deleteImage(imageId, force = false) {

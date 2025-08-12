@@ -234,7 +234,7 @@ class ModelServiceManager:
             db, service.id, LogLevel.INFO, log_message, EventType.CREATE, user_id
         )
 
-        return ServiceResponse.model_validate(service)
+        return self._service_to_response(service)
 
     async def start_service(
         self,
@@ -252,7 +252,7 @@ class ModelServiceManager:
 
         # 检查当前状态
         if service.status == ServiceStatus.RUNNING and not force_restart:
-            return ServiceResponse.model_validate(service)
+            return self._service_to_response(service)
 
         # 验证服务是否有容器
         if not service.container_id:
@@ -319,7 +319,7 @@ class ModelServiceManager:
             # 启动健康检查
             asyncio.create_task(self._start_health_monitoring(db, service.id))
 
-            return ServiceResponse.model_validate(service)
+            return self._service_to_response(service)
 
         except Exception as e:
             # 启动失败，更新状态
@@ -359,7 +359,7 @@ class ModelServiceManager:
             ServiceStatus.STOPPED,
             ServiceStatus.STOPPING,
         ]:
-            return ServiceResponse.model_validate(service)
+            return self._service_to_response(service)
 
         try:
             # 更新状态为停止中
@@ -385,7 +385,7 @@ class ModelServiceManager:
                 db, service.id, LogLevel.INFO, "服务停止成功", EventType.STOP, user_id
             )
 
-            return ServiceResponse.model_validate(service)
+            return self._service_to_response(service)
 
         except Exception as e:
             # 停止失败，记录错误但不回滚状态
@@ -713,7 +713,9 @@ class ModelServiceManager:
     ) -> ModelService:
         """根据ID获取服务"""
 
-        service_query = select(ModelService).where(ModelService.id == service_id)
+        service_query = select(ModelService).options(
+            selectinload(ModelService.image)
+        ).where(ModelService.id == service_id)
 
         result = await db.execute(service_query)
         service = result.scalar_one_or_none()
@@ -722,6 +724,22 @@ class ModelServiceManager:
             raise ValueError(f"服务 {service_id} 不存在")
 
         return service
+
+    def _service_to_response(self, service: ModelService) -> ServiceResponse:
+        """将服务对象转换为响应对象，安全处理image关系"""
+        service_dict = service.__dict__.copy()
+        if hasattr(service, 'image') and service.image:
+            service_dict['image'] = {
+                'id': service.image.id,
+                'original_name': service.image.original_name,
+                'original_tag': service.image.original_tag,
+                'description': service.image.description,
+                'status': service.image.status
+            }
+        else:
+            service_dict['image'] = None
+        
+        return ServiceResponse.model_validate(service_dict)
 
     def _generate_access_token(self) -> str:
         """生成访问令牌"""
