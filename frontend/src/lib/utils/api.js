@@ -4,6 +4,7 @@ import { goto } from '$app/navigation';
 
 import { PUBLIC_API_BASE_URL } from '$env/static/public';
 import { dev } from '$app/environment';
+import { ErrorHandler, parseApiError, getUserFriendlyMessage } from './error-handler.js';
 
 // 环境适配：开发环境使用代理，生产环境使用完整URL
 const API_BASE_URL = dev ? '' : PUBLIC_API_BASE_URL || 'http://localhost:8000';
@@ -69,18 +70,44 @@ class ApiClient {
 				if (browser) {
 					goto('/login');
 				}
-				throw new Error('Authentication required');
+
+				// 创建统一的认证错误
+				const authError = new Error('Authentication required');
+				authError.response = { status: 401, data: {} };
+				throw authError;
 			}
 
 			if (!response.ok) {
-				const error = await response.json().catch(() => ({}));
-				throw new Error(error.message || `HTTP ${response.status}`);
+				// 尝试解析错误响应
+				const errorData = await response.json().catch(() => ({}));
+
+				// 创建包含完整错误信息的错误对象
+				const error = new Error(errorData.error?.message || errorData.message || `HTTP ${response.status}`);
+				error.response = {
+					status: response.status,
+					data: errorData
+				};
+
+				throw error;
 			}
 
 			return await response.json();
 		} catch (error) {
-			console.error('API request failed:', error);
-			throw error;
+			// 使用统一错误处理器处理错误
+			const apiError = ErrorHandler.handleApiError(error, {
+				showNotification: false, // 在API层不显示通知，让组件层处理
+				logError: true
+			});
+
+			// 检查是否需要重新认证
+			if (ErrorHandler.needsReauth(apiError)) {
+				this.clearToken();
+				if (browser) {
+					goto('/login');
+				}
+			}
+
+			throw apiError;
 		}
 	}
 
@@ -399,6 +426,13 @@ class ApiClient {
 		return this.request('/api/repositories/', {
 			method: 'POST',
 			body: data
+		});
+	}
+
+	async createRepositoryWithReadme(formData) {
+		return this.request('/api/repositories/with-readme', {
+			method: 'POST',
+			body: formData
 		});
 	}
 

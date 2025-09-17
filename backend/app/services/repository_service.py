@@ -3,6 +3,7 @@ from sqlalchemy import select, func, and_, or_, desc, update
 from sqlalchemy.orm import selectinload
 from typing import Optional, Dict, Any, List, Sequence
 from fastapi import HTTPException, UploadFile
+from app.middleware.error_response import RepositoryException, FileException, UserException, ErrorCodes
 from app.models import (
     Repository,
     RepositoryFile,
@@ -38,7 +39,7 @@ class RepositoryService:
         owner = owner_result.scalar_one_or_none()
 
         if not owner:
-            raise HTTPException(status_code=404, detail="用户不存在")
+            raise UserException("用户不存在", ErrorCodes.USER_NOT_FOUND, status_code=404)
 
         # 生成完整仓库名称
         full_name = f"{owner.username}/{repo_data.name}"
@@ -49,7 +50,12 @@ class RepositoryService:
         existing_repo = existing_result.scalar_one_or_none()
 
         if existing_repo:
-            raise HTTPException(status_code=400, detail="仓库名已存在")
+            raise RepositoryException(
+                f"仓库 '{full_name}' 已存在",
+                ErrorCodes.REPOSITORY_ALREADY_EXISTS,
+                status_code=409,
+                context={"repository_name": full_name}
+            )
 
         # 如果没有提供README内容，自动生成默认README
         readme_content = repo_data.readme_content
@@ -79,7 +85,7 @@ class RepositoryService:
             readme_content=readme_content,
             tags=repo_data.tags or [],
             license=repo_data.license,
-            base_model=getattr(repo_data, 'base_model', None),
+            base_model=getattr(repo_data, "base_model", None),
         )
 
         self.db.add(db_repo)
@@ -95,10 +101,12 @@ class RepositoryService:
             if "classification_id" in metadata:
                 classification_id = metadata["classification_id"]
             else:
+                print(f"classification_id not found in metadata: {metadata}")
                 # 使用YAML解析器提取分类信息
                 classification_info = self.yaml_parser.extract_classification_info(
                     metadata
                 )
+                print(f"Extracted classification_info: {classification_info}")
                 if classification_info:
                     # 尝试通过分类名称查找分类
                     classification = await self._find_classification_by_name(
@@ -110,9 +118,7 @@ class RepositoryService:
         # 添加分类关联
         if classification_id is not None:
             try:
-                await self.add_repository_classification(
-                    db_repo.id, classification_id
-                )
+                await self.add_repository_classification(db_repo.id, classification_id)
                 # 重新加载repository以获取分类关联
                 await self.db.refresh(db_repo)
             except Exception as e:
@@ -120,10 +126,10 @@ class RepositoryService:
 
         # 使用元数据同步服务生成包含所有信息的README
         final_readme = await self.metadata_sync.sync_repository_to_readme(db_repo)
-        
+
         # 创建实体的README.md文件
         await self._create_readme_file(db_repo.id, final_readme)
-        
+
         # 更新数据库中的readme_content
         db_repo.readme_content = final_readme
         await self.db.commit()
@@ -141,12 +147,79 @@ class RepositoryService:
             select(Repository)
             .where(Repository.id == db_repo.id)
             .options(
-                selectinload(Repository.owner),
-                selectinload(Repository.classifications)
+                selectinload(Repository.owner), selectinload(Repository.classifications)
             )
         )
         result = await self.db.execute(query)
         return result.scalar_one()
+
+    async def create_repository_with_readme_file(
+        self, owner_id: int, repo_data: RepositoryCreate, readme_file: UploadFile
+    ) -> Repository:
+        """创建带README.md文件的新仓库"""
+
+        # 验证上传的文件是README.md
+        if not readme_file.filename or not readme_file.filename.lower().endswith(".md"):
+            raise FileException(
+                "只能上传Markdown文件(.md)",
+                ErrorCodes.INVALID_FILE_TYPE,
+                context={"filename": readme_file.filename, "allowed_types": [".md"]}
+            )
+
+        try:
+            # 读取README内容
+            readme_content = await readme_file.read()
+            readme_text = readme_content.decode("utf-8")
+
+            # 解析YAML frontmatter
+            metadata = None
+            try:
+                metadata = self.yaml_parser.parse(readme_text)
+            except Exception as e:
+                print(f"YAML frontmatter parsing failed: {e}")
+
+            # 更新repo_data中的metadata和readme内容
+            if metadata:
+                if not repo_data.repo_metadata:
+                    repo_data.repo_metadata = {}
+                repo_data.repo_metadata.update(metadata)
+
+                # 从metadata中提取常用字段
+                if "license" in metadata and not repo_data.license:
+                    repo_data.license = metadata["license"]
+                if "tags" in metadata and not repo_data.tags:
+                    repo_data.tags = metadata["tags"]
+                if (
+                    "base_model" in metadata
+                    and hasattr(repo_data, "base_model")
+                    and not repo_data.base_model
+                ):
+                    repo_data.base_model = metadata["base_model"]
+
+            # 设置README内容
+            repo_data.readme_content = readme_text
+
+            # 创建仓库（这会自动处理README的数据库存储和MinIO存储）
+            repository = await self.create_repository(
+                owner_id=owner_id, repo_data=repo_data
+            )
+
+            return repository
+
+        except UnicodeDecodeError:
+            raise FileException(
+                "无法解码README文件，请确保文件为UTF-8编码",
+                ErrorCodes.INVALID_FILE_TYPE,
+                context={"filename": readme_file.filename, "encoding": "UTF-8"}
+            )
+        except Exception as e:
+            print(f"创建带README的仓库失败: {e}")
+            raise RepositoryException(
+                f"创建仓库失败: {str(e)}",
+                ErrorCodes.REPOSITORY_CREATE_FAILED,
+                status_code=500,
+                context={"original_error": str(e)}
+            )
 
     def _generate_default_readme(
         self, repo_data: RepositoryCreate, username: str
@@ -178,8 +251,12 @@ class RepositoryService:
             yaml_parts.append(f"pipeline_tag: {pipeline_tags[repo_data.repo_type]}")
 
         # Base model (从repo_data的base_model字段或metadata中获取)
-        base_model = getattr(repo_data, 'base_model', None)
-        if not base_model and repo_data.repo_metadata and isinstance(repo_data.repo_metadata, dict):
+        base_model = getattr(repo_data, "base_model", None)
+        if (
+            not base_model
+            and repo_data.repo_metadata
+            and isinstance(repo_data.repo_metadata, dict)
+        ):
             base_model = repo_data.repo_metadata.get("base_model")
 
         if base_model:
@@ -241,8 +318,10 @@ class RepositoryService:
 
         # Base model (从数据库字段或metadata中获取)
         base_model = getattr(repository, "base_model", None)
-        if not base_model and getattr(repository, "repo_metadata") and isinstance(
-            repository.repo_metadata, dict
+        if (
+            not base_model
+            and getattr(repository, "repo_metadata")
+            and isinstance(repository.repo_metadata, dict)
         ):
             base_model = repository.repo_metadata.get("base_model")
 
@@ -250,12 +329,15 @@ class RepositoryService:
             yaml_parts.append(f"base_model: {base_model}")
 
         # Classifications (从关联的分类中获取)
-        if hasattr(repository, 'classifications') and repository.classifications:
+        if hasattr(repository, "classifications") and repository.classifications:
             classifications = []
             for repo_classification in repository.classifications:
-                if hasattr(repo_classification, 'classification') and repo_classification.classification:
+                if (
+                    hasattr(repo_classification, "classification")
+                    and repo_classification.classification
+                ):
                     classifications.append(repo_classification.classification.name)
-            
+
             if classifications:
                 yaml_parts.append("classifications:")
                 for classification in classifications:
@@ -335,15 +417,24 @@ class RepositoryService:
                     repository.repo_metadata = {}
 
                 # 同步其他元数据到repo_metadata
-                repo_metadata = repository.repo_metadata.copy() if repository.repo_metadata else {}
-                for key in ["pipeline_tag", "datasets", "model_type", "task", "language", "architectures"]:
+                repo_metadata = (
+                    repository.repo_metadata.copy() if repository.repo_metadata else {}
+                )
+                for key in [
+                    "pipeline_tag",
+                    "datasets",
+                    "model_type",
+                    "task",
+                    "language",
+                    "architectures",
+                ]:
                     if key in metadata:
                         repo_metadata[key] = metadata[key]
-                
+
                 # 保持base_model同时在数据库字段和metadata中
                 if "base_model" in metadata:
                     repo_metadata["base_model"] = metadata["base_model"]
-                
+
                 repository.repo_metadata = repo_metadata
 
                 # 处理分类信息
@@ -499,7 +590,7 @@ class RepositoryService:
             setattr(repository, "license", repo_data.license)
             needs_readme_sync = True
 
-        if hasattr(repo_data, 'base_model') and repo_data.base_model is not None:
+        if hasattr(repo_data, "base_model") and repo_data.base_model is not None:
             setattr(repository, "base_model", repo_data.base_model)
             needs_readme_sync = True
         if repo_data.readme_content is not None:
@@ -516,10 +607,14 @@ class RepositoryService:
         # 使用增强的双向同步服务
         if readme_updated:
             # README被更新，同步到数据库字段
-            await self.metadata_sync.sync_readme_to_repository(repository, repo_data.readme_content)
+            await self.metadata_sync.sync_readme_to_repository(
+                repository, repo_data.readme_content
+            )
         elif needs_readme_sync:
             # 数据库字段被更新，同步到README
-            updated_readme = await self.metadata_sync.sync_repository_to_readme(repository)
+            updated_readme = await self.metadata_sync.sync_repository_to_readme(
+                repository
+            )
             setattr(repository, "readme_content", updated_readme)
             # 同步更新MinIO中的README.md文件
             try:

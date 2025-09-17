@@ -9,11 +9,11 @@
 
   // 缓存计算结果，避免重复计算
   const sizeClassMap = {
-    xs: 'h-6 w-6',
-    sm: 'h-8 w-8', 
-    md: 'h-10 w-10',
-    lg: 'h-12 w-12',
-    xl: 'h-16 w-16'
+    xs: 'h-5 w-5',
+    sm: 'h-7 w-7',
+    md: 'h-9 w-9',
+    lg: 'h-11 w-11',
+    xl: 'h-14 w-14'
   };
 
   const iconSizeClassMap = {
@@ -76,7 +76,7 @@
   <div class="relative">
     {#if clickable && user}
       <a href="/{user.username}" class="block">
-        <div class="relative {sizeClasses} rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+        <div class="relative {sizeClasses} rounded-lg overflow-hidden bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
           {#if user?.avatar_url && !imageError}
             <!-- 图片加载状态管理 -->
             <div class="h-full w-full relative">
@@ -107,7 +107,7 @@
         </div>
       </a>
     {:else}
-      <div class="relative {sizeClasses} rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+      <div class="relative {sizeClasses} rounded-lg overflow-hidden bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
         {#if user?.avatar_url && !imageError}
           <!-- 图片加载状态管理 -->
           <div class="h-full w-full relative">

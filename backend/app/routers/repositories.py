@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Path, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Query, Path, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_, desc
 from sqlalchemy.orm import selectinload
@@ -34,7 +34,7 @@ from app.dependencies.auth import (
     require_repository_owner,
     require_repository_access,
 )
-from app.middleware.error_handler import NotFoundError, AuthorizationError
+from app.middleware.error_response import NotFoundError, AuthorizationError
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -380,6 +380,39 @@ async def create_repository(
     repo_service = RepositoryService(db)
     repository = await repo_service.create_repository(
         owner_id=getattr(current_user, "id"), repo_data=repo_data
+    )
+    return repository
+
+
+async def parse_repo_data_from_form(repo_data: str = Form(..., description="仓库数据JSON字符串")) -> RepositoryCreate:
+    """从FormData中解析仓库数据的依赖项"""
+    import json
+    from pydantic import ValidationError
+
+    try:
+        # 解析JSON字符串为字典
+        repo_data_dict = json.loads(repo_data)
+        # 验证并创建RepositoryCreate对象
+        return RepositoryCreate(**repo_data_dict)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=422, detail="仓库数据格式错误：无效的JSON")
+    except ValidationError as e:
+        raise HTTPException(status_code=422, detail=f"仓库数据验证失败：{e}")
+
+
+@router.post("/with-readme", response_model=RepositorySchema)
+async def create_repository_with_readme(
+    repo_data: RepositoryCreate = Depends(parse_repo_data_from_form),
+    readme_file: UploadFile = File(..., description="README.md文件"),
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """创建带README.md文件的新仓库 - 需要认证"""
+    repo_service = RepositoryService(db)
+    repository = await repo_service.create_repository_with_readme_file(
+        owner_id=getattr(current_user, "id"),
+        repo_data=repo_data,
+        readme_file=readme_file
     )
     return repository
 

@@ -18,7 +18,7 @@ from app.routers import (
     services,
     images,
 )
-from app.middleware.error_handler import add_exception_handlers
+from app.middleware.error_response import global_exception_handler
 from app.services.model_service import service_manager
 from app.database import get_async_db
 import logging
@@ -70,8 +70,12 @@ app.add_middleware(
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Add exception handlers
-add_exception_handlers(app)
+# Add specific handlers for unified error handling
+from fastapi.exceptions import RequestValidationError
+app.add_exception_handler(RequestValidationError, global_exception_handler)
+
+# Add global exception handler for unified error handling
+app.add_exception_handler(Exception, global_exception_handler)
 
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])

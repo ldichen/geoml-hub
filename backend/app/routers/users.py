@@ -17,7 +17,7 @@ from app.schemas.repository import RepositoryListItem
 from app.utils.repository_utils import enrich_repositories_with_classification_paths
 from app.services.user_service import UserService
 from app.dependencies.auth import get_current_user, get_current_active_user
-from app.middleware.error_handler import NotFoundError, AuthorizationError
+from app.middleware.error_response import NotFoundError, AuthorizationError
 
 router = APIRouter()
 

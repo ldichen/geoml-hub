@@ -4,7 +4,7 @@ from sqlalchemy.orm import selectinload
 from typing import Optional, Dict, Any, List
 from app.models import User, UserFollow, UserStorage, Repository
 from app.schemas.user import UserCreate, UserUpdate
-from app.middleware.error_handler import NotFoundError, ConflictError
+from app.middleware.error_response import NotFoundError, ConflictError
 from fastapi import HTTPException
 
 

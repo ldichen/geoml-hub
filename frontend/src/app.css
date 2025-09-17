@@ -112,6 +112,12 @@
 		}
 	}
 
+	@media (width >= 112rem) {
+		.container {
+			max-width: 112rem;
+		}
+	}
+
 	.section {
 		@apply py-8 lg:py-12;
 	}
@@ -181,10 +187,10 @@
 
 	/* 备用方案，更高优先级 */
 	.sidebar-gradient-left {
-		background: linear-gradient(to left, var(--color-gray-50), var(--color-white)) !important;
+		background: linear-gradient(to left, var(--color-gray-100), var(--color-white)) !important;
 	}
 	.sidebar-gradient-right {
-		background: linear-gradient(to right, var(--color-gray-50), var(--color-white)) !important;
+		background: linear-gradient(to right, var(--color-gray-100), var(--color-white)) !important;
 	}
 	.from-gray-50-to-white {
 		--tw-gradient-from: var(--color-gray-50);

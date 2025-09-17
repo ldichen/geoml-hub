@@ -644,31 +644,80 @@
 		<!-- Edit/Preview 标签切换 -->
 		{#if fileInfo && isMarkdownFile(fileInfo.filename)}
 			<div class="container px-4 py-2 flex items-center justify-between">
-				<div class="flex space-x-1">
-					<button
-						class="px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors"
-						class:border-blue-500={currentEditorView === 'edit'}
-						class:text-blue-600={currentEditorView === 'edit'}
-						class:bg-white={currentEditorView === 'edit'}
-						class:border-transparent={currentEditorView !== 'edit'}
-						class:text-gray-500={currentEditorView !== 'edit'}
-						class:hover:text-gray-700={currentEditorView !== 'edit'}
-						on:click={() => currentEditorView = 'edit'}
-					>
-						Edit
-					</button>
-					<button
-						class="px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors"
-						class:border-blue-500={currentEditorView === 'preview'}
-						class:text-blue-600={currentEditorView === 'preview'}
-						class:bg-white={currentEditorView === 'preview'}
-						class:border-transparent={currentEditorView !== 'preview'}
-						class:text-gray-500={currentEditorView !== 'preview'}
-						class:hover:text-gray-700={currentEditorView !== 'preview'}
-						on:click={() => currentEditorView = 'preview'}
-					>
-						Preview
-					</button>
+				<div class="flex items-center space-x-4">
+					<div class="flex space-x-1">
+						<button
+							class="px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors"
+							class:border-blue-500={currentEditorView === 'edit'}
+							class:text-blue-600={currentEditorView === 'edit'}
+							class:bg-white={currentEditorView === 'edit'}
+							class:border-transparent={currentEditorView !== 'edit'}
+							class:text-gray-500={currentEditorView !== 'edit'}
+							class:hover:text-gray-700={currentEditorView !== 'edit'}
+							on:click={() => currentEditorView = 'edit'}
+						>
+							Edit
+						</button>
+						<button
+							class="px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors"
+							class:border-blue-500={currentEditorView === 'preview'}
+							class:text-blue-600={currentEditorView === 'preview'}
+							class:bg-white={currentEditorView === 'preview'}
+							class:border-transparent={currentEditorView !== 'preview'}
+							class:text-gray-500={currentEditorView !== 'preview'}
+							class:hover:text-gray-700={currentEditorView !== 'preview'}
+							on:click={() => currentEditorView = 'preview'}
+						>
+							Preview
+						</button>
+					</div>
+					
+					<!-- Markdown文件名编辑区域 -->
+					<div class="flex items-center space-x-2">
+						<span class="text-xs text-gray-500">文件名:</span>
+						{#if isEditingFileName}
+							<div class="flex items-center space-x-2">
+								<input
+									type="text"
+									bind:value={newFileName}
+									class="px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+									class:border-red-300={!isValidFileName(newFileName)}
+									style="min-width: 150px;"
+									on:keydown={(e) => {
+										if (e.key === 'Enter') saveFileName();
+										if (e.key === 'Escape') cancelFileNameEdit();
+									}}
+								/>
+								<button
+									class="p-1 text-green-600 hover:text-green-700 hover:bg-green-50 rounded"
+									on:click={saveFileName}
+									disabled={!isValidFileName(newFileName)}
+								>
+									<Check class="h-3 w-3" />
+								</button>
+								<button
+									class="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded"
+									on:click={cancelFileNameEdit}
+								>
+									<X class="h-3 w-3" />
+								</button>
+							</div>
+							{#if !isValidFileName(newFileName)}
+								<span class="text-xs text-red-500">无效字符</span>
+							{/if}
+						{:else}
+							<div class="flex items-center space-x-1">
+								<span class="text-xs font-medium text-gray-900">{originalFileName}</span>
+								<button
+									class="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded"
+									on:click={startEditingFileName}
+									title="编辑文件名"
+								>
+									<Edit2 class="h-3 w-3" />
+								</button>
+							</div>
+						{/if}
+					</div>
 				</div>
 				
 				<!-- 简化的操作按钮 -->

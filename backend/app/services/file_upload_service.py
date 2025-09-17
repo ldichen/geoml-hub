@@ -4,7 +4,7 @@ from typing import Dict, Any, Optional, List
 from app.models import FileUploadSession, RepositoryFile, Repository
 from app.services.minio_service import minio_service
 from app.config import settings
-from app.middleware.error_handler import NotFoundError, DataValidationError
+from app.middleware.error_response import NotFoundError, DataValidationError
 import hashlib
 import time
 from datetime import datetime, timedelta, timezone

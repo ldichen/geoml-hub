@@ -107,9 +107,9 @@ async def list_images(
     except Exception as e:
         logger.error(f"列出镜像API失败: {e}")
         if "仓库不存在" in str(e):
-            from app.middleware.error_handler import NotFoundError
+            from app.middleware.error_response import RepositoryException, ErrorCodes
 
-            raise NotFoundError(str(e))
+            raise RepositoryException(str(e), ErrorCodes.REPOSITORY_NOT_FOUND, status_code=404)
         raise HTTPException(status_code=400, detail=str(e))
 
 
