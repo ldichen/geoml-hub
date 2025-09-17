@@ -60,6 +60,11 @@ class Repository(Base):
     classifications = relationship("RepositoryClassification", back_populates="repository", cascade="all, delete-orphan")
     model_services = relationship("ModelService", back_populates="repository", cascade="all, delete-orphan")
     images = relationship("Image", back_populates="repository", cascade="all, delete-orphan")
+
+    # 版本控制关联关系
+    snapshots = relationship("Snapshot", back_populates="repository", cascade="all, delete-orphan")
+    branches = relationship("Branch", back_populates="repository", cascade="all, delete-orphan")
+    releases = relationship("Release", back_populates="repository", cascade="all, delete-orphan")
     
     @property
     def image_count(self):

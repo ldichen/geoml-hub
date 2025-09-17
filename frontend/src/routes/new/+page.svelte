@@ -81,6 +81,41 @@
 		}
 	}
 
+	// 拖拽上传相关状态
+	let isDragOver = false;
+
+	// 拖拽处理函数
+	function handleDragEnter(event) {
+		event.preventDefault();
+		isDragOver = true;
+	}
+
+	function handleDragLeave(event) {
+		event.preventDefault();
+		isDragOver = false;
+	}
+
+	function handleDragOver(event) {
+		event.preventDefault();
+	}
+
+	function handleDrop(event) {
+		event.preventDefault();
+		isDragOver = false;
+
+		const files = event.dataTransfer?.files;
+		if (files && files.length > 0) {
+			const file = files[0];
+			if (file.name.toLowerCase().endsWith('.md')) {
+				readmeFile = file;
+				errors.readme = null;
+			} else {
+				errors.readme = '请选择.md格式的文件';
+				readmeFile = null;
+			}
+		}
+	}
+
 	function addTag() {
 		if (tagInput.trim() && !formData.tags.includes(tagInput.trim())) {
 			formData.tags = [...formData.tags, tagInput.trim()];
@@ -371,7 +406,22 @@
 
 						{#if !readmeFile}
 							<div
-								class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center hover:border-blue-500 dark:hover:border-blue-400 transition-colors"
+								class="border-2 border-dashed rounded-lg p-6 text-center transition-all duration-200 cursor-pointer {isDragOver
+									? 'border-blue-500 dark:border-blue-400 bg-blue-50/50 dark:bg-blue-950/30'
+									: 'border-gray-300 dark:border-gray-600 hover:border-blue-500 dark:hover:border-blue-400'}"
+								on:dragenter={handleDragEnter}
+								on:dragleave={handleDragLeave}
+								on:dragover={handleDragOver}
+								on:drop={handleDrop}
+								on:click={() => fileInput?.click()}
+								role="button"
+								tabindex="0"
+								on:keydown={(e) => {
+									if (e.key === 'Enter' || e.key === ' ') {
+										e.preventDefault();
+										fileInput?.click();
+									}
+								}}
 							>
 								<input
 									type="file"
@@ -380,31 +430,58 @@
 									bind:this={fileInput}
 									class="hidden"
 								/>
-								<svg
-									class="mx-auto h-12 w-12 text-slate-400"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
-									<path
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										stroke-width="2"
-										d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-									/>
-								</svg>
-								<div class="mt-4">
-									<button
-										type="button"
-										class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-blue-600 bg-blue-100 hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-400 dark:hover:bg-blue-800 transition-colors"
-										on:click={() => fileInput?.click()}
+
+								{#if isDragOver}
+									<!-- 拖拽状态图标 -->
+									<svg
+										class="mx-auto h-12 w-12 text-blue-500 dark:text-blue-400"
+										fill="none"
+										stroke="currentColor"
+										viewBox="0 0 24 24"
 									>
-										选择 README.md 文件
-									</button>
-								</div>
-								<p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-									支持 .md 格式，系统将自动解析 YAML 前言获取配置信息
-								</p>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+										/>
+									</svg>
+									<div class="mt-4">
+										<p class="text-blue-600 dark:text-blue-400 font-medium">
+											松开鼠标上传文件
+										</p>
+									</div>
+								{:else}
+									<!-- 默认状态图标 -->
+									<svg
+										class="mx-auto h-12 w-12 text-slate-400"
+										fill="none"
+										stroke="currentColor"
+										viewBox="0 0 24 24"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+										/>
+									</svg>
+									<div class="mt-4">
+										<button
+											type="button"
+											class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-blue-600 bg-blue-100 hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-400 dark:hover:bg-blue-800 transition-colors"
+											on:click|stopPropagation={() => fileInput?.click()}
+										>
+											选择 README.md 文件
+										</button>
+									</div>
+									<p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+										支持 .md 格式，可点击选择或拖拽文件到此处上传
+									</p>
+									<p class="mt-1 text-xs text-gray-400 dark:text-gray-500">
+										系统将自动解析 YAML 前言获取配置信息
+									</p>
+								{/if}
 							</div>
 						{:else}
 							<div

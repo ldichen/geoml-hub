@@ -76,7 +76,7 @@
 				<div class="flex items-center mb-2">
 					{#each repo.classification_path as classification, index}
 						<span
-							class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-500 text-white dark:bg-blue-900 dark:text-blue-200"
+							class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-900 dark:hover:bg-blue-900 shadow-sm"
 						>
 							{classification}
 						</span>

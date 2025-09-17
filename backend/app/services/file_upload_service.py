@@ -25,6 +25,7 @@ class FileUploadService:
         file_path: str,
         content_type: Optional[str] = None,
         user_id: Optional[int] = None,
+        custom_storage_path: Optional[str] = None,
     ) -> Dict[str, Any]:
         """初始化文件上传会话"""
 
@@ -33,9 +34,13 @@ class FileUploadService:
         if file_size > max_size:
             raise DataValidationError(f"文件大小超过限制 {settings.max_file_size_mb}MB")
 
-        # 生成唯一的对象键
-        timestamp = int(time.time())
-        object_key = f"repositories/{repository_id}/{timestamp}_{file_name}"
+        # 生成对象键 - 支持自定义存储路径或使用默认路径
+        if custom_storage_path:
+            object_key = f"{custom_storage_path}/{file_path}"
+        else:
+            # 保持向后兼容性的默认路径
+            timestamp = int(time.time())
+            object_key = f"repositories/{repository_id}/{timestamp}_{file_name}"
 
         # 计算分片数量
         chunk_size = settings.chunk_size_mb * 1024 * 1024
@@ -196,13 +201,13 @@ class FileUploadService:
             # 创建仓库文件记录
             repository_file = RepositoryFile(
                 repository_id=session.repository_id,
-                file_name=session.file_name,
+                filename=session.file_name,
                 file_path=session.file_path,
                 file_size=session.file_size,
-                content_type=session.content_type,
-                minio_object_name=session.minio_object_key,
-                minio_etag=final_etag,
-                upload_session_id=getattr(session, "id"),
+                mime_type=session.content_type,
+                minio_bucket=settings.minio_default_bucket,
+                minio_object_key=session.minio_object_key,
+                file_hash=final_etag,
             )
 
             self.db.add(repository_file)
@@ -220,10 +225,10 @@ class FileUploadService:
 
             return {
                 "file_id": repository_file.id,
-                "file_name": repository_file.file_name,
+                "file_name": repository_file.filename,
                 "file_size": repository_file.file_size,
                 "file_path": repository_file.file_path,
-                "content_type": repository_file.content_type,
+                "content_type": repository_file.mime_type,
                 "etag": final_etag,
                 "status": "completed",
             }

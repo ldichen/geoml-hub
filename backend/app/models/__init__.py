@@ -6,6 +6,7 @@ from .personal_files import PersonalFile, PersonalFileDownload, PersonalFolder
 from .image import Image, ImageBuildLog
 from .service import ModelService, ServiceLog, ServiceHealthCheck
 from .container_registry import MManagerController
+from .version_control import Snapshot, Branch, Release, SnapshotFile
 
 __all__ = [
     "Classification",
@@ -15,5 +16,6 @@ __all__ = [
     "PersonalFile", "PersonalFileDownload", "PersonalFolder",
     "Image", "ImageBuildLog",
     "ModelService", "ServiceLog", "ServiceHealthCheck",
-    "MManagerController"
+    "MManagerController",
+    "Snapshot", "Branch", "Release", "SnapshotFile"
 ]

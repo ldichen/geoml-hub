@@ -17,6 +17,7 @@ from app.routers import (
     personal_files,
     services,
     images,
+    version_control,
 )
 from app.middleware.error_response import global_exception_handler
 from app.services.model_service import service_manager
@@ -107,6 +108,8 @@ app.include_router(system.router, prefix="/api/system", tags=["system"])
 app.include_router(services.router, prefix="/api/services", tags=["services"])
 # 镜像管理
 app.include_router(images.router, prefix="/api/images", tags=["images"])
+# 版本控制
+app.include_router(version_control.router, tags=["version-control"])
 
 
 @app.get("/")

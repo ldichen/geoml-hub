@@ -17,6 +17,7 @@ from app.schemas.repository import RepositoryCreate, RepositoryUpdate
 from app.utils.yaml_parser import YAMLFrontmatterParser
 from app.services.minio_service import MinIOService
 from app.services.metadata_sync_service import MetadataSyncService
+from app.services.version_control_service import VersionControlService
 import uuid
 from datetime import datetime, timezone
 import os
@@ -28,6 +29,7 @@ class RepositoryService:
         self.yaml_parser = YAMLFrontmatterParser()
         self.minio_service = MinIOService()
         self.metadata_sync = MetadataSyncService(db)
+        self.version_control = VersionControlService(db)
 
     async def create_repository(
         self, owner_id: int, repo_data: RepositoryCreate
@@ -140,6 +142,21 @@ class RepositoryService:
                 owner, "public_repos_count", getattr(owner, "public_repos_count") + 1
             )
             await self.db.commit()
+
+        # 初始化默认分支 (main) - 直接在数据库中创建
+        try:
+            from app.models.version_control import Branch
+            main_branch = Branch(
+                repository_id=db_repo.id,
+                name="main",
+                head_snapshot_id=None,  # 初始时没有快照
+                is_default=True,
+            )
+            self.db.add(main_branch)
+            await self.db.commit()
+        except Exception as e:
+            # 分支创建失败不应该阻止仓库创建
+            print(f"Failed to create main branch: {e}")
 
         # 加载关联数据
         await self.db.refresh(db_repo)
@@ -842,6 +859,117 @@ class RepositoryService:
 
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"文件上传失败: {str(e)}")
+
+    async def upload_files_with_snapshot(
+        self,
+        repository_id: int,
+        user_id: int,
+        files: List[UploadFile],
+        file_paths: List[str],
+        commit_message: str,
+        branch: str = "main",
+    ) -> Dict[str, Any]:
+        """上传文件并创建快照 (版本控制)"""
+
+        if len(files) != len(file_paths):
+            raise HTTPException(status_code=400, detail="文件数量与路径数量不匹配")
+
+        # 检查仓库是否存在
+        repo_query = select(Repository).where(Repository.id == repository_id)
+        repo_result = await self.db.execute(repo_query)
+        repository = repo_result.scalar_one_or_none()
+
+        if not repository:
+            raise HTTPException(status_code=404, detail="仓库不存在")
+
+        try:
+            # 准备文件上传信息
+            file_uploads = []
+            for file, file_path in zip(files, file_paths):
+                content = await file.read()
+                file_uploads.append({
+                    "file_name": file.filename or file_path.split("/")[-1],
+                    "file_path": file_path,
+                    "file_size": len(content),
+                    "content_type": file.content_type,
+                    "content": content.decode('utf-8') if file.content_type and file.content_type.startswith('text/') else None,
+                })
+
+            # 创建快照
+            snapshot_result = await self.version_control.create_snapshot(
+                repository_id=repository_id,
+                author_id=user_id,
+                message=commit_message,
+                branch=branch,
+                file_uploads=file_uploads,
+            )
+
+            return {
+                "success": True,
+                "snapshot": snapshot_result,
+                "message": f"成功上传 {len(files)} 个文件并创建快照",
+            }
+
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"文件上传和快照创建失败: {str(e)}")
+
+    # 版本控制相关方法
+    async def get_repository_snapshots(
+        self, repository_id: int, branch: Optional[str] = None, page: int = 1, limit: int = 20
+    ) -> Dict[str, Any]:
+        """获取仓库快照列表"""
+        return await self.version_control.get_snapshots(repository_id, branch, page, limit)
+
+    async def get_repository_branches(self, repository_id: int) -> Dict[str, Any]:
+        """获取仓库分支列表"""
+        return await self.version_control.get_branches(repository_id)
+
+    async def get_repository_releases(
+        self, repository_id: int, page: int = 1, limit: int = 20
+    ) -> Dict[str, Any]:
+        """获取仓库发布版本列表"""
+        return await self.version_control.get_releases(repository_id, page, limit)
+
+    async def create_repository_branch(
+        self, repository_id: int, name: str, source_branch: str = "main"
+    ) -> Dict[str, Any]:
+        """创建仓库分支"""
+        return await self.version_control.create_branch(repository_id, name, source_branch)
+
+    async def create_repository_release(
+        self,
+        repository_id: int,
+        tag_name: str,
+        snapshot_id: str,
+        title: str,
+        description: Optional[str] = None,
+        is_prerelease: bool = False,
+    ) -> Dict[str, Any]:
+        """创建仓库发布版本"""
+        return await self.version_control.create_release(
+            repository_id, tag_name, snapshot_id, title, description, is_prerelease
+        )
+
+    async def compare_repository_snapshots(
+        self, repository_id: int, base_snapshot_id: str, compare_snapshot_id: str
+    ) -> Dict[str, Any]:
+        """比较仓库快照"""
+        return await self.version_control.compare_snapshots(
+            repository_id, base_snapshot_id, compare_snapshot_id
+        )
+
+    async def rollback_repository(
+        self,
+        repository_id: int,
+        target_snapshot_id: str,
+        branch: str,
+        user_id: int,
+        message: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """回滚仓库到指定快照"""
+        return await self.version_control.rollback_to_snapshot(
+            repository_id, target_snapshot_id, branch, user_id, message
+        )
 
     async def download_file(
         self,
