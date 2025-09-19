@@ -226,14 +226,14 @@
 				commitMessage 
 			});
 			
-			// 调用真实的API保存文件
-			const response = await api.request(`/api/repositories/${username}/${repositoryName}/blob/${filePath}`, {
-				method: 'PUT',
-				body: {
-					content: fileContent,
-					commit_message: commitMessage
-				}
-			});
+			// 调用封装的API保存文件
+			const response = await api.updateFileContent(
+				username,
+				repositoryName,
+				filePath,
+				fileContent,
+				commitMessage
+			);
 			
 			console.log('✅ 文件保存成功，服务器响应:', response);
 			
@@ -463,30 +463,46 @@
 		}
 		
 		try {
-			// 调用API重命名文件
-			const response = await api.request(`/api/repositories/${username}/${repositoryName}/files/rename`, {
-				method: 'POST',
-				body: {
-					old_path: filePath,
-					new_filename: newFileName,
-					commit_message: `重命名文件: ${originalFileName} -> ${newFileName}`
-				}
-			});
-			
-			// 更新文件信息
+			// 调用封装的API重命名文件
+			const response = await api.renameRepositoryFile(
+				username,
+				repositoryName,
+				filePath,
+				newFileName,
+				`重命名文件: ${originalFileName} -> ${newFileName}`
+			);
+
+			// 计算新的文件路径
+			const newPath = getNewFilePath(filePath, originalFileName, newFileName);
+
+			// 更新所有相关状态
+			const oldFileName = originalFileName;
 			originalFileName = newFileName;
 			fileInfo.filename = newFileName;
-			isEditingFileName = false;
-			
-			toast = { type: 'success', message: '文件名修改成功' };
-			
-			// 如果需要，可以重定向到新的文件路径
-			const newPath = filePath.replace(originalFileName, newFileName);
-			if (newPath !== filePath) {
-				// 注意：这里可能需要根据实际的URL结构调整
-				// goto(`/${username}/${repositoryName}/edit/${newPath}`);
+			fileInfo.file_path = newPath;
+
+			// 如果服务器返回了更新的文件信息，使用服务器的数据
+			if (response.file_info) {
+				fileInfo.file_size = response.file_info.file_size;
+				fileInfo.updated_at = response.file_info.updated_at;
 			}
-			
+
+			isEditingFileName = false;
+			toast = { type: 'success', message: '文件名修改成功' };
+
+			// 如果文件路径发生了变化，重定向到新的URL
+			if (newPath !== filePath) {
+				console.log('文件路径已更改，重定向到新路径:', {
+					oldPath: filePath,
+					newPath: newPath
+				});
+
+				// 使用 replaceState 避免在浏览器历史中留下无效的URL
+				await goto(`/${username}/${repositoryName}/edit/${newPath}`, {
+					replaceState: true
+				});
+			}
+
 		} catch (err) {
 			console.error('重命名文件失败:', err);
 			const errorMessage = err.response?.data?.detail || err.message || '重命名文件失败';
@@ -499,6 +515,34 @@
 		// 基本的文件名验证
 		const invalidChars = /[<>:"/\\|?*]/;
 		return filename && filename.trim() && !invalidChars.test(filename);
+	}
+
+	// 安全的文件路径处理函数
+	function getNewFilePath(oldPath, oldFileName, newFileName) {
+		// 如果路径中没有 "/"，说明是根目录下的文件
+		if (!oldPath.includes('/')) {
+			return oldPath === oldFileName ? newFileName : oldPath;
+		}
+
+		// 分解路径
+		const pathParts = oldPath.split('/');
+		const lastPart = pathParts[pathParts.length - 1];
+
+		// 检查最后一部分是否与旧文件名匹配
+		if (lastPart === oldFileName) {
+			pathParts[pathParts.length - 1] = newFileName;
+			return pathParts.join('/');
+		}
+
+		// 如果路径结构不匹配，可能是复杂的嵌套路径，保持原路径
+		console.warn('文件路径结构不匹配，无法自动更新路径:', { oldPath, oldFileName, newFileName });
+		return oldPath;
+	}
+
+	// 获取文件所在目录路径
+	function getDirectoryPath(filePath) {
+		const lastSlashIndex = filePath.lastIndexOf('/');
+		return lastSlashIndex === -1 ? '' : filePath.substring(0, lastSlashIndex);
 	}
 </script>
 
@@ -672,7 +716,13 @@
 						</button>
 					</div>
 					
-					<!-- Markdown文件名编辑区域 -->
+					<!-- Markdown文件名显示区域 -->
+					<div class="flex items-center space-x-2">
+						<span class="text-xs text-gray-500">文件名:</span>
+						<span class="text-xs font-medium text-gray-900">{originalFileName}</span>
+					</div>
+
+					<!-- 注释：文件名编辑功能已暂时禁用
 					<div class="flex items-center space-x-2">
 						<span class="text-xs text-gray-500">文件名:</span>
 						{#if isEditingFileName}
@@ -718,6 +768,7 @@
 							</div>
 						{/if}
 					</div>
+					-->
 				</div>
 				
 				<!-- 简化的操作按钮 -->
@@ -747,54 +798,61 @@
 						编辑模式
 					</div>
 					
-					<!-- 文件名编辑区域 -->
+					<!-- 文件名显示区域 -->
 					{#if fileInfo}
 						<div class="flex items-center space-x-2">
 							<span class="text-xs text-gray-500">文件名:</span>
-							{#if isEditingFileName}
-								<div class="flex items-center space-x-2">
-									<input
-										type="text"
-										bind:value={newFileName}
-										class="px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-										class:border-red-300={!isValidFileName(newFileName)}
-										style="min-width: 150px;"
-										on:keydown={(e) => {
-											if (e.key === 'Enter') saveFileName();
-											if (e.key === 'Escape') cancelFileNameEdit();
-										}}
-									/>
-									<button
-										class="p-1 text-green-600 hover:text-green-700 hover:bg-green-50 rounded"
-										on:click={saveFileName}
-										disabled={!isValidFileName(newFileName)}
-									>
-										<Check class="h-3 w-3" />
-									</button>
-									<button
-										class="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded"
-										on:click={cancelFileNameEdit}
-									>
-										<X class="h-3 w-3" />
-									</button>
-								</div>
-								{#if !isValidFileName(newFileName)}
-									<span class="text-xs text-red-500">无效字符</span>
-								{/if}
-							{:else}
-								<div class="flex items-center space-x-1">
-									<span class="text-xs font-medium text-gray-900">{originalFileName}</span>
-									<button
-										class="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded"
-										on:click={startEditingFileName}
-										title="编辑文件名"
-									>
-										<Edit2 class="h-3 w-3" />
-									</button>
-								</div>
-							{/if}
+							<span class="text-xs font-medium text-gray-900">{originalFileName}</span>
 						</div>
 					{/if}
+
+					<!-- 注释：文件名编辑功能已暂时禁用
+					<div class="flex items-center space-x-2">
+						<span class="text-xs text-gray-500">文件名:</span>
+						{#if isEditingFileName}
+							<div class="flex items-center space-x-2">
+								<input
+									type="text"
+									bind:value={newFileName}
+									class="px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+									class:border-red-300={!isValidFileName(newFileName)}
+									style="min-width: 150px;"
+									on:keydown={(e) => {
+										if (e.key === 'Enter') saveFileName();
+										if (e.key === 'Escape') cancelFileNameEdit();
+									}}
+								/>
+								<button
+									class="p-1 text-green-600 hover:text-green-700 hover:bg-green-50 rounded"
+									on:click={saveFileName}
+									disabled={!isValidFileName(newFileName)}
+								>
+									<Check class="h-3 w-3" />
+								</button>
+								<button
+									class="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded"
+									on:click={cancelFileNameEdit}
+								>
+									<X class="h-3 w-3" />
+								</button>
+							</div>
+							{#if !isValidFileName(newFileName)}
+								<span class="text-xs text-red-500">无效字符</span>
+							{/if}
+						{:else}
+							<div class="flex items-center space-x-1">
+								<span class="text-xs font-medium text-gray-900">{originalFileName}</span>
+								<button
+									class="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded"
+									on:click={startEditingFileName}
+									title="编辑文件名"
+								>
+									<Edit2 class="h-3 w-3" />
+								</button>
+							</div>
+						{/if}
+					</div>
+					-->
 				</div>
 				
 				<div class="flex items-center space-x-2">

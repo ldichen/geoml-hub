@@ -485,10 +485,19 @@ class ApiClient {
 		});
 	}
 
-	async uploadRepositoryFile(owner, name, file, onProgress = null) {
+	async checkUploadConflict(owner, name, fileName) {
+		const filePath = encodeURIComponent(fileName);
+		return this.request(`/api/repositories/${owner}/${name}/check-upload?file_path=${filePath}`, {
+			method: 'POST'
+		});
+	}
+
+	async uploadRepositoryFile(owner, name, file, options = {}) {
+		const { onProgress = null, confirmed = false } = options;
 		const filePath = encodeURIComponent(file.name);
+		const confirmParam = confirmed ? '&confirmed=true' : '';
 		return this.uploadFile(
-			`/api/repositories/${owner}/${name}/upload?file_path=${filePath}`,
+			`/api/repositories/${owner}/${name}/upload?file_path=${filePath}${confirmParam}`,
 			file,
 			onProgress
 		);
@@ -516,6 +525,7 @@ class ApiClient {
 			method: 'DELETE'
 		});
 	}
+
 
 	// ================== Services API ==================
 	async getRepositoryServices(owner, name, params = {}) {
@@ -809,6 +819,44 @@ class ApiClient {
 	// ================== Classifications API ==================
 	async getClassificationTree() {
 		return this.request('/api/classifications/tree');
+	}
+
+	// ================== File Editing API ==================
+	/**
+	 * 更新文件内容
+	 * @param {string} username - 用户名
+	 * @param {string} repositoryName - 仓库名
+	 * @param {string} filePath - 文件路径
+	 * @param {string} content - 文件内容
+	 * @param {string} commitMessage - 提交信息
+	 */
+	async updateFileContent(username, repositoryName, filePath, content, commitMessage) {
+		return this.request(`/api/repositories/${username}/${repositoryName}/blob/${filePath}`, {
+			method: 'PUT',
+			body: {
+				content: content,
+				commit_message: commitMessage
+			}
+		});
+	}
+
+	/**
+	 * 重命名文件
+	 * @param {string} username - 用户名
+	 * @param {string} repositoryName - 仓库名
+	 * @param {string} oldPath - 旧文件路径
+	 * @param {string} newFilename - 新文件名
+	 * @param {string} commitMessage - 提交信息
+	 */
+	async renameRepositoryFile(username, repositoryName, oldPath, newFilename, commitMessage) {
+		return this.request(`/api/repositories/${username}/${repositoryName}/files/rename`, {
+			method: 'POST',
+			body: {
+				old_path: oldPath,
+				new_filename: newFilename,
+				commit_message: commitMessage
+			}
+		});
 	}
 }
 

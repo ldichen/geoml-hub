@@ -3,7 +3,12 @@ from sqlalchemy import select, func, and_, or_, desc, update
 from sqlalchemy.orm import selectinload
 from typing import Optional, Dict, Any, List, Sequence
 from fastapi import HTTPException, UploadFile
-from app.middleware.error_response import RepositoryException, FileException, UserException, ErrorCodes
+from app.middleware.error_response import (
+    RepositoryException,
+    FileException,
+    UserException,
+    ErrorCodes,
+)
 from app.models import (
     Repository,
     RepositoryFile,
@@ -17,10 +22,13 @@ from app.schemas.repository import RepositoryCreate, RepositoryUpdate
 from app.utils.yaml_parser import YAMLFrontmatterParser
 from app.services.minio_service import MinIOService
 from app.services.metadata_sync_service import MetadataSyncService
-from app.services.version_control_service import VersionControlService
-import uuid
+from app.utils.logger import get_logger
+
+
 from datetime import datetime, timezone
 import os
+
+logger = get_logger(__name__)
 
 
 class RepositoryService:
@@ -29,7 +37,6 @@ class RepositoryService:
         self.yaml_parser = YAMLFrontmatterParser()
         self.minio_service = MinIOService()
         self.metadata_sync = MetadataSyncService(db)
-        self.version_control = VersionControlService(db)
 
     async def create_repository(
         self, owner_id: int, repo_data: RepositoryCreate
@@ -41,7 +48,9 @@ class RepositoryService:
         owner = owner_result.scalar_one_or_none()
 
         if not owner:
-            raise UserException("用户不存在", ErrorCodes.USER_NOT_FOUND, status_code=404)
+            raise UserException(
+                "用户不存在", ErrorCodes.USER_NOT_FOUND, status_code=404
+            )
 
         # 生成完整仓库名称
         full_name = f"{owner.username}/{repo_data.name}"
@@ -56,7 +65,7 @@ class RepositoryService:
                 f"仓库 '{full_name}' 已存在",
                 ErrorCodes.REPOSITORY_ALREADY_EXISTS,
                 status_code=409,
-                context={"repository_name": full_name}
+                context={"repository_name": full_name},
             )
 
         # 如果没有提供README内容，自动生成默认README
@@ -143,21 +152,6 @@ class RepositoryService:
             )
             await self.db.commit()
 
-        # 初始化默认分支 (main) - 直接在数据库中创建
-        try:
-            from app.models.version_control import Branch
-            main_branch = Branch(
-                repository_id=db_repo.id,
-                name="main",
-                head_snapshot_id=None,  # 初始时没有快照
-                is_default=True,
-            )
-            self.db.add(main_branch)
-            await self.db.commit()
-        except Exception as e:
-            # 分支创建失败不应该阻止仓库创建
-            print(f"Failed to create main branch: {e}")
-
         # 加载关联数据
         await self.db.refresh(db_repo)
         query = (
@@ -180,7 +174,7 @@ class RepositoryService:
             raise FileException(
                 "只能上传Markdown文件(.md)",
                 ErrorCodes.INVALID_FILE_TYPE,
-                context={"filename": readme_file.filename, "allowed_types": [".md"]}
+                context={"filename": readme_file.filename, "allowed_types": [".md"]},
             )
 
         try:
@@ -227,7 +221,7 @@ class RepositoryService:
             raise FileException(
                 "无法解码README文件，请确保文件为UTF-8编码",
                 ErrorCodes.INVALID_FILE_TYPE,
-                context={"filename": readme_file.filename, "encoding": "UTF-8"}
+                context={"filename": readme_file.filename, "encoding": "UTF-8"},
             )
         except Exception as e:
             print(f"创建带README的仓库失败: {e}")
@@ -235,7 +229,7 @@ class RepositoryService:
                 f"创建仓库失败: {str(e)}",
                 ErrorCodes.REPOSITORY_CREATE_FAILED,
                 status_code=500,
-                context={"original_error": str(e)}
+                context={"original_error": str(e)},
             )
 
     def _generate_default_readme(
@@ -480,6 +474,22 @@ class RepositoryService:
     async def _create_readme_file(self, repository_id: int, readme_content: str):
         """创建实体的README.md文件"""
         try:
+            # 获取仓库和所有者信息以生成正确的路径
+            repo_query = (
+                select(Repository)
+                .where(Repository.id == repository_id)
+                .options(selectinload(Repository.owner))
+            )
+            repo_result = await self.db.execute(repo_query)
+            repository = repo_result.scalar_one_or_none()
+
+            if not repository:
+                print(f"Repository {repository_id} not found when creating README")
+                return
+
+            # 新的路径格式: {username}_{user_id}/{repo_name}_{repo_id}/README.md
+            object_key = f"{repository.owner.username}_{repository.owner.id}/{repository.name}_{repository.id}/README.md"
+
             # 创建README.md文件记录
             readme_file = RepositoryFile(
                 repository_id=repository_id,
@@ -489,7 +499,7 @@ class RepositoryService:
                 mime_type="text/markdown",
                 file_size=len(readme_content.encode("utf-8")),
                 minio_bucket="repositories",
-                minio_object_key=f"repository_{repository_id}/README.md",
+                minio_object_key=object_key,
                 is_deleted=False,
             )
 
@@ -497,12 +507,15 @@ class RepositoryService:
             self.db.add(readme_file)
 
             # 上传到MinIO
-            await self.minio_service.upload_file(
+            upload_result = await self.minio_service.upload_file(
                 bucket_name="repositories",
-                object_key=f"repository_{repository_id}/README.md",
+                object_key=object_key,
                 file_data=readme_content.encode("utf-8"),
                 content_type="text/markdown",
             )
+
+            # 设置文件哈希
+            readme_file.file_hash = upload_result.get("etag")
 
             await self.db.commit()
 
@@ -764,24 +777,270 @@ class RepositoryService:
 
         await self.db.commit()
 
-    async def upload_file(
-        self, repository_id: int, file: UploadFile, file_path: str
-    ) -> RepositoryFile:
-        """上传文件到仓库"""
+    def _is_special_file(self, file_path: str) -> bool:
+        """判断是否为特殊文件（需要特殊处理的文件）"""
+        special_files = {
+            "readme.md",
+            "readme.txt",
+            "license",
+            "license.txt",
+            "license.md",
+            "dockerfile",
+            "docker-compose.yml",
+            "docker-compose.yaml",
+            ".gitignore",
+            "requirements.txt",
+            "package.json",
+            "pyproject.toml",
+            "setup.py",
+        }
+        return file_path.lower() in special_files
+
+    def _generate_unique_filename(self, original_path: str, existing_paths: set) -> str:
+        """为重复文件生成唯一的文件名"""
+        if original_path not in existing_paths:
+            return original_path
+
+        # 分离文件名和扩展名
+        if "." in original_path:
+            # 处理多个扩展名的情况，如 file.tar.gz
+            parts = original_path.split(".")
+            if len(parts) >= 2:
+                # 检查是否有常见的双扩展名
+                double_extensions = {".tar.gz", ".tar.bz2", ".tar.xz", ".tar.Z"}
+                name_part = ".".join(parts[:-1])
+                ext_part = "." + parts[-1]
+
+                # 检查双扩展名
+                if len(parts) >= 3:
+                    potential_double_ext = "." + parts[-2] + "." + parts[-1]
+                    if potential_double_ext in double_extensions:
+                        name_part = ".".join(parts[:-2])
+                        ext_part = potential_double_ext
+            else:
+                name_part = parts[0]
+                ext_part = "." + parts[1]
+        else:
+            name_part = original_path
+            ext_part = ""
+
+        # 递归查找可用的编号
+        counter = 1
+        while True:
+            new_path = f"{name_part}({counter}){ext_part}"
+            if new_path not in existing_paths:
+                return new_path
+            counter += 1
+
+    async def _check_file_exists(self, repository_id: int, file_path: str) -> bool:
+        """检查文件是否已存在"""
+        query = select(RepositoryFile).where(
+            and_(
+                RepositoryFile.repository_id == repository_id,
+                RepositoryFile.file_path == file_path,
+                RepositoryFile.is_deleted == False,
+            )
+        )
+        result = await self.db.execute(query)
+        return result.scalar_one_or_none() is not None
+
+    async def _get_existing_file_paths(self, repository_id: int) -> set:
+        """获取仓库中所有已存在的文件路径"""
+        query = select(RepositoryFile.file_path).where(
+            and_(
+                RepositoryFile.repository_id == repository_id,
+                RepositoryFile.is_deleted == False,
+            )
+        )
+        result = await self.db.execute(query)
+        return {row[0] for row in result.fetchall()}
+
+    async def check_upload_conflict(self, repository_id: int, file_path: str) -> dict:
+        """检查上传文件是否有冲突"""
         # 检查仓库是否存在
         repo_query = select(Repository).where(Repository.id == repository_id)
         repo_result = await self.db.execute(repo_query)
         repository = repo_result.scalar_one_or_none()
-
         if not repository:
             raise HTTPException(status_code=404, detail="仓库不存在")
 
-        # 生成唯一的对象键
-        if file.filename:
-            file_extension = os.path.splitext(file.filename)[1]
+        # 检查是否为特殊文件
+        is_special = self._is_special_file(file_path)
+
+        result = {
+            "has_conflict": False,
+            "is_special_file": is_special,
+            "file_path": file_path,
+            "existing_files": [],
+            "conflict_type": None,
+        }
+
+        if is_special:
+            # 特殊文件：使用大小写不敏感的查找
+            existing_query = select(RepositoryFile).where(
+                and_(
+                    RepositoryFile.repository_id == repository_id,
+                    func.lower(RepositoryFile.file_path) == file_path.lower(),
+                    RepositoryFile.is_deleted == False,
+                )
+            )
+            existing_result = await self.db.execute(existing_query)
+            existing_files = existing_result.scalars().all()
+
+            if existing_files:
+                result["has_conflict"] = True
+                result["conflict_type"] = "special_file_replace"
+                result["existing_files"] = [
+                    {
+                        "file_path": f.file_path,
+                        "file_size": f.file_size,
+                        "updated_at": (
+                            f.updated_at.isoformat() if f.updated_at else None
+                        ),
+                    }
+                    for f in existing_files
+                ]
         else:
-            file_extension = ""
-        object_key = f"{repository.full_name}/{file_path}"
+            # 普通文件：精确匹配检查
+            file_exists = await self._check_file_exists(repository_id, file_path)
+            if file_exists:
+                result["has_conflict"] = True
+                result["conflict_type"] = "normal_file_rename"
+
+        return result
+
+    async def upload_file(
+        self,
+        repository_id: int,
+        file: UploadFile,
+        file_path: str,
+        confirmed: bool = False,
+    ) -> dict:
+        """上传文件到仓库 - 实现混合策略处理重复文件"""
+        # 检查仓库是否存在并加载所有者信息
+        repo_query = (
+            select(Repository)
+            .options(selectinload(Repository.owner))
+            .where(Repository.id == repository_id)
+        )
+        repo_result = await self.db.execute(repo_query)
+        repository = repo_result.scalar_one_or_none()
+        if not repository:
+            raise HTTPException(status_code=404, detail="仓库不存在")
+
+        # 准备返回信息
+        upload_info = {
+            "original_filename": file_path,
+            "final_filename": file_path,
+            "action": "uploaded",  # uploaded, replaced, renamed
+            "message": "文件上传成功",
+        }
+
+        # 首先判断是否为特殊文件，然后检查是否存在
+        is_special = self._is_special_file(file_path)
+
+        if is_special:
+            # 特殊文件：使用大小写不敏感的查找现有文件
+            existing_query = select(RepositoryFile).where(
+                and_(
+                    RepositoryFile.repository_id == repository_id,
+                    func.lower(RepositoryFile.file_path) == file_path.lower(),
+                    RepositoryFile.is_deleted == False,
+                )
+            )
+            existing_result = await self.db.execute(existing_query)
+            existing_files = existing_result.scalars().all()
+
+            if existing_files and not confirmed:
+                # 特殊文件存在冲突且未确认，要求用户确认
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "error": "special_file_conflict",
+                        "message": "特殊文件已存在，需要确认替换",
+                        "existing_files": [f.file_path for f in existing_files],
+                        "uploaded_file": file_path,
+                        "conflict_type": "special_file_replace",
+                    },
+                )
+
+            if existing_files:
+                # 找到现有文件，执行替换操作
+                upload_info["action"] = "replaced"
+                # 如果找到多个匹配的特殊文件，删除所有匹配的文件
+
+                # 生成替换消息
+                if len(existing_files) == 1:
+                    original_filename = existing_files[0].file_path
+                    if (
+                        original_filename.lower() == file_path.lower()
+                        and original_filename != file_path
+                    ):
+                        upload_info["message"] = (
+                            f"已替换现有的 {original_filename} 文件（大小写已更新为 {file_path}）"
+                        )
+                    else:
+                        upload_info["message"] = (
+                            f"已替换现有的 {original_filename} 文件"
+                        )
+                else:
+                    filenames = [f.file_path for f in existing_files]
+                    upload_info["message"] = (
+                        f"已替换 {len(existing_files)} 个现有文件 ({', '.join(filenames)}) 为 {file_path}"
+                    )
+
+                # 删除所有匹配的文件并更新统计
+                total_size_reduction = 0
+                for existing_file in existing_files:
+                    total_size_reduction += existing_file.file_size
+
+                    # 先删除 MinIO 中的文件
+                    try:
+                        await self.minio_service.delete_file(
+                            bucket_name=existing_file.minio_bucket,
+                            object_key=existing_file.minio_object_key
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to delete MinIO file {existing_file.minio_object_key}: {e}")
+
+                    # Hard delete: directly from database delete record
+                    await self.db.delete(existing_file)
+
+                # 更新仓库统计（减去所有旧文件）
+                setattr(
+                    repository,
+                    "total_files",
+                    getattr(repository, "total_files") - len(existing_files),
+                )
+                setattr(
+                    repository,
+                    "total_size",
+                    getattr(repository, "total_size") - total_size_reduction,
+                )
+                # 立即提交事务，避免唯一约束冲突
+                await self.db.commit()
+            else:
+                # 没有找到现有文件，这是新的特殊文件上传
+                upload_info["action"] = "uploaded"
+                upload_info["message"] = f"已上传 {file_path} 文件"
+        else:
+            # 普通文件：检查是否存在，如果存在则重命名
+            file_exists = await self._check_file_exists(repository_id, file_path)
+            logger.info(f"Normal file exists check for '{file_path}': {file_exists}")
+
+            if file_exists:
+                # 普通文件：自动重命名
+                existing_paths = await self._get_existing_file_paths(repository_id)
+                final_file_path = self._generate_unique_filename(
+                    file_path, existing_paths
+                )
+                upload_info["final_filename"] = final_file_path
+                upload_info["action"] = "renamed"
+                upload_info["message"] = f"文件已重命名为 {final_file_path} 并上传成功"
+                file_path = final_file_path
+
+        # 生成唯一的对象键 - 使用新的统一路径格式
+        object_key = f"{repository.owner.username}_{repository.owner.id}/{repository.name}_{repository.id}/{file_path}"
 
         # 上传到MinIO
         try:
@@ -828,9 +1087,12 @@ class RepositoryService:
                     content_str = file_content.decode("utf-8")
                     metadata = self.yaml_parser.parse(content_str)
 
+                    # 更新仓库的 readme_content 字段
+                    setattr(repository, "readme_content", content_str)
+
                     if metadata:
                         # 更新仓库元数据
-                        setattr(db_file, "repo_metadata", metadata)
+                        setattr(repository, "repo_metadata", metadata)
 
                         # 提取并更新分类信息
                         classification_info = (
@@ -852,124 +1114,17 @@ class RepositoryService:
                     # README.md分类更新失败不应该阻止文件上传
                     print(f"README.md classification update failed: {e}")
 
+            # 提交所有变更
             await self.db.commit()
             await self.db.refresh(db_file)
 
-            return db_file
+            # 添加文件信息到返回结果
+            upload_info["file"] = db_file
+            return upload_info
 
         except Exception as e:
+            logger.error(f"File upload failed: {e}")
             raise HTTPException(status_code=500, detail=f"文件上传失败: {str(e)}")
-
-    async def upload_files_with_snapshot(
-        self,
-        repository_id: int,
-        user_id: int,
-        files: List[UploadFile],
-        file_paths: List[str],
-        commit_message: str,
-        branch: str = "main",
-    ) -> Dict[str, Any]:
-        """上传文件并创建快照 (版本控制)"""
-
-        if len(files) != len(file_paths):
-            raise HTTPException(status_code=400, detail="文件数量与路径数量不匹配")
-
-        # 检查仓库是否存在
-        repo_query = select(Repository).where(Repository.id == repository_id)
-        repo_result = await self.db.execute(repo_query)
-        repository = repo_result.scalar_one_or_none()
-
-        if not repository:
-            raise HTTPException(status_code=404, detail="仓库不存在")
-
-        try:
-            # 准备文件上传信息
-            file_uploads = []
-            for file, file_path in zip(files, file_paths):
-                content = await file.read()
-                file_uploads.append({
-                    "file_name": file.filename or file_path.split("/")[-1],
-                    "file_path": file_path,
-                    "file_size": len(content),
-                    "content_type": file.content_type,
-                    "content": content.decode('utf-8') if file.content_type and file.content_type.startswith('text/') else None,
-                })
-
-            # 创建快照
-            snapshot_result = await self.version_control.create_snapshot(
-                repository_id=repository_id,
-                author_id=user_id,
-                message=commit_message,
-                branch=branch,
-                file_uploads=file_uploads,
-            )
-
-            return {
-                "success": True,
-                "snapshot": snapshot_result,
-                "message": f"成功上传 {len(files)} 个文件并创建快照",
-            }
-
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"文件上传和快照创建失败: {str(e)}")
-
-    # 版本控制相关方法
-    async def get_repository_snapshots(
-        self, repository_id: int, branch: Optional[str] = None, page: int = 1, limit: int = 20
-    ) -> Dict[str, Any]:
-        """获取仓库快照列表"""
-        return await self.version_control.get_snapshots(repository_id, branch, page, limit)
-
-    async def get_repository_branches(self, repository_id: int) -> Dict[str, Any]:
-        """获取仓库分支列表"""
-        return await self.version_control.get_branches(repository_id)
-
-    async def get_repository_releases(
-        self, repository_id: int, page: int = 1, limit: int = 20
-    ) -> Dict[str, Any]:
-        """获取仓库发布版本列表"""
-        return await self.version_control.get_releases(repository_id, page, limit)
-
-    async def create_repository_branch(
-        self, repository_id: int, name: str, source_branch: str = "main"
-    ) -> Dict[str, Any]:
-        """创建仓库分支"""
-        return await self.version_control.create_branch(repository_id, name, source_branch)
-
-    async def create_repository_release(
-        self,
-        repository_id: int,
-        tag_name: str,
-        snapshot_id: str,
-        title: str,
-        description: Optional[str] = None,
-        is_prerelease: bool = False,
-    ) -> Dict[str, Any]:
-        """创建仓库发布版本"""
-        return await self.version_control.create_release(
-            repository_id, tag_name, snapshot_id, title, description, is_prerelease
-        )
-
-    async def compare_repository_snapshots(
-        self, repository_id: int, base_snapshot_id: str, compare_snapshot_id: str
-    ) -> Dict[str, Any]:
-        """比较仓库快照"""
-        return await self.version_control.compare_snapshots(
-            repository_id, base_snapshot_id, compare_snapshot_id
-        )
-
-    async def rollback_repository(
-        self,
-        repository_id: int,
-        target_snapshot_id: str,
-        branch: str,
-        user_id: int,
-        message: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """回滚仓库到指定快照"""
-        return await self.version_control.rollback_to_snapshot(
-            repository_id, target_snapshot_id, branch, user_id, message
-        )
 
     async def download_file(
         self,
@@ -1266,10 +1421,8 @@ class RepositoryService:
                 {
                     "id": classification.id,
                     "name": classification.name,
-                    "name_en": classification.name_en,
                     "level": level,
                     "parent_id": classification.parent_id,
-                    "description": classification.description,
                 }
             )
 
@@ -1283,3 +1436,151 @@ class RepositoryService:
         result = await self.db.execute(delete_query)
         await self.db.commit()
         return getattr(result, "rowcount") > 0
+
+    async def rename_file(
+        self,
+        repository_id: int,
+        old_path: str,
+        new_filename: str,
+        commit_message: str = None,
+    ) -> dict:
+        """重命名仓库中的文件"""
+        # 查找要重命名的文件
+        file_query = select(RepositoryFile).options(
+            selectinload(RepositoryFile.repository).selectinload(Repository.owner)
+        ).where(
+            and_(
+                RepositoryFile.repository_id == repository_id,
+                RepositoryFile.file_path == old_path,
+                RepositoryFile.is_deleted == False,
+            )
+        )
+        file_result = await self.db.execute(file_query)
+        file_record = file_result.scalar_one_or_none()
+
+        if not file_record:
+            raise ValueError("文件不存在")
+
+        # 计算新的文件路径
+        new_path = (
+            old_path.rsplit("/", 1)[0] + "/" + new_filename
+            if "/" in old_path
+            else new_filename
+        )
+
+        # 检查新文件名是否已存在 - 区分特殊文件和普通文件
+        is_special_file = self._is_special_file(new_filename)
+
+        if is_special_file:
+            # 特殊文件：大小写不敏感检查
+            existing_query = select(RepositoryFile).where(
+                and_(
+                    RepositoryFile.repository_id == repository_id,
+                    func.lower(RepositoryFile.file_path) == new_path.lower(),
+                    RepositoryFile.is_deleted == False,
+                    RepositoryFile.id != file_record.id,  # 排除自己
+                )
+            )
+        else:
+            # 普通文件：精确匹配
+            existing_query = select(RepositoryFile).where(
+                and_(
+                    RepositoryFile.repository_id == repository_id,
+                    RepositoryFile.file_path == new_path,
+                    RepositoryFile.is_deleted == False,
+                    RepositoryFile.id != file_record.id,  # 排除自己
+                )
+            )
+
+        existing_result = await self.db.execute(existing_query)
+        existing_file = existing_result.scalar_one_or_none()
+
+        if existing_file:
+            raise ValueError(f"目标文件名已存在: {new_path}")
+
+        # 获取仓库和所有者信息用于生成MinIO object_key
+        repository = file_record.repository
+        old_object_key = file_record.minio_object_key
+        new_object_key = f"{repository.owner.username}_{repository.owner.id}/{repository.name}_{repository.id}/{new_path}"
+
+        try:
+            # 1. 使用高效的 copy_object 方式在MinIO中重命名文件
+            copy_result = await self.minio_service.copy_object(
+                source_bucket=file_record.minio_bucket,
+                source_object=old_object_key,
+                dest_bucket=file_record.minio_bucket,
+                dest_object=new_object_key,
+            )
+
+            if not copy_result.get("success"):
+                raise Exception(f"MinIO 文件复制失败: {copy_result.get('error')}")
+
+            # 2. 更新数据库记录
+            file_record.filename = new_filename
+            file_record.file_path = new_path
+            file_record.minio_object_key = new_object_key
+            file_record.updated_at = datetime.now(timezone.utc)
+
+            # 如果是README文件，更新仓库的readme_content
+            if new_filename.lower() == "readme.md":
+                try:
+                    # 需要读取文件内容来更新 readme_content
+                    file_content = await self.minio_service.get_file_content(
+                        bucket_name=file_record.minio_bucket,
+                        object_key=new_object_key
+                    )
+                    content_str = file_content.decode("utf-8")
+                    repository.readme_content = content_str
+
+                    # 解析YAML frontmatter并更新分类
+                    metadata = self.yaml_parser.parse(content_str)
+                    if metadata:
+                        repository.repo_metadata = metadata
+                        classification_info = self.yaml_parser.extract_classification_info(metadata)
+                        if classification_info:
+                            await self.remove_repository_classification(repository_id)
+                            classification = await self._find_classification_by_name(classification_info)
+                            if classification:
+                                await self.add_repository_classification(repository_id, classification.id)
+                except Exception as e:
+                    logger.warning(f"Failed to update README content during rename: {e}")
+
+            # 3. 提交数据库更改
+            await self.db.commit()
+
+            # 4. 删除MinIO中的旧文件
+            try:
+                await self.minio_service.delete_file(
+                    bucket_name=file_record.minio_bucket,
+                    object_key=old_object_key
+                )
+            except Exception as e:
+                logger.warning(f"Failed to delete old MinIO file {old_object_key}: {e}")
+
+            await self.db.refresh(file_record)
+
+            return {
+                "message": "文件重命名成功",
+                "old_path": old_path,
+                "new_path": new_path,
+                "new_filename": new_filename,
+                "file_info": {
+                    "id": file_record.id,
+                    "filename": file_record.filename,
+                    "file_path": file_record.file_path,
+                    "file_size": file_record.file_size,
+                    "updated_at": file_record.updated_at.isoformat() if file_record.updated_at else None,
+                },
+            }
+
+        except Exception as e:
+            await self.db.rollback()
+            # 如果数据库操作失败，尝试清理可能已创建的新MinIO文件
+            try:
+                await self.minio_service.delete_file(
+                    bucket_name=file_record.minio_bucket,
+                    object_key=new_object_key
+                )
+            except:
+                pass
+            raise e

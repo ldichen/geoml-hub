@@ -1,4 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Path, UploadFile, File, Form
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Query,
+    Path,
+    UploadFile,
+    File,
+    Form,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_, desc
 from sqlalchemy.orm import selectinload
@@ -384,7 +393,9 @@ async def create_repository(
     return repository
 
 
-async def parse_repo_data_from_form(repo_data: str = Form(..., description="仓库数据JSON字符串")) -> RepositoryCreate:
+async def parse_repo_data_from_form(
+    repo_data: str = Form(..., description="仓库数据JSON字符串")
+) -> RepositoryCreate:
     """从FormData中解析仓库数据的依赖项"""
     import json
     from pydantic import ValidationError
@@ -412,7 +423,7 @@ async def create_repository_with_readme(
     repository = await repo_service.create_repository_with_readme_file(
         owner_id=getattr(current_user, "id"),
         repo_data=repo_data,
-        readme_file=readme_file
+        readme_file=readme_file,
     )
     return repository
 
@@ -479,12 +490,40 @@ async def unstar_repository(
     return {"message": f"已取消收藏仓库 {owner}/{repo_name}"}
 
 
+@router.post("/{owner}/{repo_name}/check-upload")
+async def check_upload_conflict(
+    owner: str = Path(..., description="仓库所有者用户名"),
+    repo_name: str = Path(..., description="仓库名称"),
+    file_path: str = Query(..., description="文件在仓库中的路径"),
+    current_user: User = Depends(require_repository_owner),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """检查文件上传是否有冲突"""
+    repo_service = RepositoryService(db)
+
+    # 检查仓库是否存在
+    repository = await repo_service.get_repository_by_full_name(f"{owner}/{repo_name}")
+    if not repository:
+        raise HTTPException(status_code=404, detail="仓库不存在")
+
+    # 验证用户是否是仓库所有者
+    if getattr(current_user, "username") != owner:
+        raise AuthorizationError("只有仓库所有者可以上传文件")
+
+    # 检查上传冲突
+    conflict_result = await repo_service.check_upload_conflict(
+        repository_id=getattr(repository, "id"), file_path=file_path
+    )
+    return conflict_result
+
+
 @router.post("/{owner}/{repo_name}/upload")
 async def upload_file(
     owner: str = Path(..., description="仓库所有者用户名"),
     repo_name: str = Path(..., description="仓库名称"),
     file: UploadFile = File(...),
     file_path: str = Query(..., description="文件在仓库中的路径"),
+    confirmed: bool = Query(False, description="是否已确认替换特殊文件"),
     current_user: User = Depends(require_repository_owner),
     db: AsyncSession = Depends(get_async_db),
 ):
@@ -501,11 +540,23 @@ async def upload_file(
         raise AuthorizationError("只有仓库所有者可以上传文件")
 
     # 上传文件
-    uploaded_file = await repo_service.upload_file(
-        repository_id=getattr(repository, "id"), file=file, file_path=file_path
+    upload_result = await repo_service.upload_file(
+        repository_id=getattr(repository, "id"),
+        file=file,
+        file_path=file_path,
+        confirmed=confirmed,
     )
 
-    return {"message": "文件上传成功", "file": uploaded_file}
+    # 返回详细的上传信息
+    return {
+        "message": upload_result["message"],
+        "file": upload_result["file"],
+        "upload_info": {
+            "original_filename": upload_result["original_filename"],
+            "final_filename": upload_result["final_filename"],
+            "action": upload_result["action"],
+        },
+    }
 
 
 @router.post("/{owner}/{repo_name}/upload/init")
@@ -1435,12 +1486,13 @@ async def batch_upload_files(
                 )
                 continue
             # 上传文件
-            file_record = await repo_service.upload_file(
+            upload_result = await repo_service.upload_file(
                 repository_id=getattr(repository, "id"),
                 file=file,
                 file_path=file.filename,  # 使用原始文件名作为路径
             )
 
+            file_record = upload_result["file"]
             upload_results.append(
                 {
                     "filename": file.filename,
@@ -1448,6 +1500,12 @@ async def batch_upload_files(
                     "file_id": file_record.id,
                     "file_path": file_record.file_path,
                     "file_size": file_record.file_size,
+                    "upload_info": {
+                        "original_filename": upload_result["original_filename"],
+                        "final_filename": upload_result["final_filename"],
+                        "action": upload_result["action"],
+                        "message": upload_result["message"],
+                    },
                 }
             )
 
@@ -1772,65 +1830,18 @@ async def rename_file(
                 status_code=400, detail="old_path 和 new_filename 不能为空"
             )
 
-        # 查找要重命名的文件
-        file_query = select(RepositoryFile).where(
-            and_(
-                RepositoryFile.repository_id == repository.id,
-                RepositoryFile.file_path == old_path,
-                RepositoryFile.is_deleted == False,
-            )
+        # 调用 service 层方法
+        result = await repo_service.rename_file(
+            repository_id=repository.id,
+            old_path=old_path,
+            new_filename=new_filename,
+            commit_message=commit_message,
         )
-        file_result = await db.execute(file_query)
-        file_record = file_result.scalar_one_or_none()
 
-        if not file_record:
-            raise HTTPException(status_code=404, detail="文件不存在")
+        return result
 
-        # 检查新文件名是否已存在
-        new_path = (
-            old_path.rsplit("/", 1)[0] + "/" + new_filename
-            if "/" in old_path
-            else new_filename
-        )
-        existing_file_query = select(RepositoryFile).where(
-            and_(
-                RepositoryFile.repository_id == repository.id,
-                RepositoryFile.file_path == new_path,
-                RepositoryFile.is_deleted == False,
-            )
-        )
-        existing_result = await db.execute(existing_file_query)
-        existing_file = existing_result.scalar_one_or_none()
-
-        if existing_file:
-            raise HTTPException(status_code=400, detail="目标文件名已存在")
-
-        # 更新文件记录
-        file_record.filename = new_filename
-        file_record.file_path = new_path
-        file_record.updated_at = datetime.now(timezone.utc)
-
-        await db.commit()
-        await db.refresh(file_record)
-
-        return {
-            "message": "文件重命名成功",
-            "old_path": old_path,
-            "new_path": new_path,
-            "new_filename": new_filename,
-            "file_info": {
-                "id": file_record.id,
-                "filename": file_record.filename,
-                "file_path": file_record.file_path,
-                "file_size": file_record.file_size,
-                "updated_at": (
-                    file_record.updated_at.isoformat()
-                    if file_record.updated_at
-                    else None
-                ),
-            },
-        }
-
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except HTTPException:
         raise
     except Exception as e:

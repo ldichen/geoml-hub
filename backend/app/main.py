@@ -17,13 +17,10 @@ from app.routers import (
     personal_files,
     services,
     images,
-    version_control,
 )
 from app.middleware.error_response import global_exception_handler
 from app.services.model_service import service_manager
 from app.database import get_async_db
-import logging
-import asyncio
 
 # Configure logging
 from app.utils.logger import setup_logging, get_logger
@@ -73,6 +70,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Add specific handlers for unified error handling
 from fastapi.exceptions import RequestValidationError
+
 app.add_exception_handler(RequestValidationError, global_exception_handler)
 
 # Add global exception handler for unified error handling
@@ -108,8 +106,6 @@ app.include_router(system.router, prefix="/api/system", tags=["system"])
 app.include_router(services.router, prefix="/api/services", tags=["services"])
 # 镜像管理
 app.include_router(images.router, prefix="/api/images", tags=["images"])
-# 版本控制
-app.include_router(version_control.router, tags=["version-control"])
 
 
 @app.get("/")

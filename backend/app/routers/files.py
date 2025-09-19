@@ -234,7 +234,7 @@ async def delete_file(
     query = (
         select(RepositoryFile)
         .options(selectinload(RepositoryFile.repository))
-        .where(and_(RepositoryFile.id == file_id, RepositoryFile.is_deleted == False))
+        .where(RepositoryFile.id == file_id)
     )
 
     result = await db.execute(query)
@@ -250,20 +250,65 @@ async def delete_file(
         raise HTTPException(status_code=403, detail="无权限删除此文件")
 
     try:
-        # 从MinIO删除文件
-        await minio_service.delete_file(
-            bucket_name=file.minio_bucket, object_key=file.minio_object_key
-        )
-
-        # 标记为已删除
-        setattr(file, "is_deleted", True)
+        # 先进行所有数据库操作
+        repository = file.repository
 
         # 更新仓库统计
-        repository = file.repository
         repository.total_files = max(0, repository.total_files - 1)
         repository.total_size = max(0, repository.total_size - file.file_size)
 
+        # 检查是否删除的是 README 文件
+        is_readme_file = file.file_path.lower() == "readme.md"
+
+        # 硬删除：直接从数据库删除记录
+        await db.delete(file)
+
+        # 如果删除的是 README 文件，更新 readme_content
+        if is_readme_file:
+            # 查找仓库中是否还有其他 README 文件
+            remaining_readme_query = (
+                select(RepositoryFile)
+                .where(
+                    and_(
+                        RepositoryFile.repository_id == repository.id,
+                        func.lower(RepositoryFile.file_path) == "readme.md",
+                        RepositoryFile.is_deleted == False
+                    )
+                )
+                .order_by(RepositoryFile.created_at.desc())
+            )
+
+            remaining_readme_result = await db.execute(remaining_readme_query)
+            remaining_readme = remaining_readme_result.scalars().first()
+
+            if remaining_readme:
+                # 还有其他 README 文件，读取其内容
+                try:
+                    file_content = await minio_service.get_file_content(
+                        bucket_name=remaining_readme.minio_bucket,
+                        object_key=remaining_readme.minio_object_key
+                    )
+                    content_str = file_content.decode("utf-8")
+                    repository.readme_content = content_str
+                except Exception as e:
+                    logger.warning(f"Failed to read remaining README content: {e}")
+                    # 如果读取失败，设置默认内容
+                    repository.readme_content = f"# {repository.name}\n\n> 此仓库暂无可读取的 README 文件。\n\n请添加 README.md 文件来描述您的项目。"
+            else:
+                # 没有其他 README 文件，设置默认内容
+                repository.readme_content = f"# {repository.name}\n\n> 此仓库暂无 README 文件。\n\n请添加 README.md 文件来描述您的项目。"
+
+        # 提交数据库事务
         await db.commit()
+
+        # 最后删除MinIO文件（如果失败不影响用户体验）
+        try:
+            await minio_service.delete_file(
+                bucket_name=file.minio_bucket, object_key=file.minio_object_key
+            )
+        except Exception as e:
+            logger.warning(f"Failed to delete MinIO file {file.minio_object_key}: {e}")
+            # MinIO删除失败不抛出异常，避免影响用户体验
 
         return {"message": "文件已删除"}
 

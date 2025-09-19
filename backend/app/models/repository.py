@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, Boolean, ARRAY, JSON, BIGINT, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, Boolean, ARRAY, JSON, BIGINT, UniqueConstraint, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -61,10 +61,6 @@ class Repository(Base):
     model_services = relationship("ModelService", back_populates="repository", cascade="all, delete-orphan")
     images = relationship("Image", back_populates="repository", cascade="all, delete-orphan")
 
-    # 版本控制关联关系
-    snapshots = relationship("Snapshot", back_populates="repository", cascade="all, delete-orphan")
-    branches = relationship("Branch", back_populates="repository", cascade="all, delete-orphan")
-    releases = relationship("Release", back_populates="repository", cascade="all, delete-orphan")
     
     @property
     def image_count(self):
@@ -114,7 +110,7 @@ class RepositoryFile(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
     __table_args__ = (
-        UniqueConstraint('repository_id', 'file_path', name='unique_file_per_repo'),
+        Index('unique_file_per_repo', 'repository_id', 'file_path', unique=True, postgresql_where=(is_deleted == False)),
     )
     
     # 关系

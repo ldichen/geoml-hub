@@ -14,7 +14,10 @@
 		FolderOpen,
 		ChevronDown,
 		Edit2,
-		Trash2
+		Trash2,
+		Tag,
+		AlertCircle,
+		X
 	} from 'lucide-svelte';
 	import { formatDistanceToNow } from 'date-fns';
 	import { zhCN } from 'date-fns/locale';
@@ -51,7 +54,10 @@
 	let showDropZone = false; // 控制拖拽上传弹窗显示
 	let isDragOver = false; // 控制拖拽状态
 	let pendingFiles = []; // 待确认上传的文件
+	let pendingFilesIsFolder = false; // 待上传文件是否为文件夹
 	let showUploadConfirm = false; // 显示上传确认弹窗
+	let showConfirmDialog = false;
+	let confirmDialogData = null;
 
 	// Service modals and views
 	let showCreateServiceModal = false;
@@ -586,10 +592,11 @@
 
 	// 文件输入处理
 	function handleFileInputChange(e) {
-		const files = Array.from(e.target.files);
-		const isFolder = files.some((file) => file.webkitRelativePath);
+		const target = e.target;
+		const files = Array.from(target.files || []);
+		const isFolder = files.some((file) => (file as any).webkitRelativePath);
 		showUploadConfirmation(files, isFolder);
-		e.target.value = ''; // 清空输入
+		target.value = ''; // 清空输入
 	}
 
 	// 递归读取文件夹
@@ -633,7 +640,7 @@
 	// 显示上传确认
 	function showUploadConfirmation(files, isFolder) {
 		pendingFiles = files;
-		pendingFiles.isFolder = isFolder;
+		pendingFilesIsFolder = isFolder;
 		showUploadConfirm = true;
 	}
 
@@ -642,7 +649,7 @@
 		showUploadConfirm = false;
 
 		for (const file of pendingFiles) {
-			const relativePath = file.webkitRelativePath || null;
+			const relativePath = (file as any).webkitRelativePath || null;
 			await uploadFileWithProgress(file, relativePath);
 		}
 
@@ -662,7 +669,7 @@
 		console.log(`选中了 ${files.length} 个文件进行上传，是文件夹: ${isFolder}`);
 
 		for (const file of files) {
-			const relativePath = isFolder ? file.webkitRelativePath : null;
+			const relativePath = isFolder ? (file as any).webkitRelativePath : null;
 			await uploadFileWithProgress(file, relativePath);
 		}
 	}
@@ -684,7 +691,7 @@
 		console.log(`选中了 ${selectedFiles.length} 个文件进行上传`);
 
 		for (const file of selectedFiles) {
-			await uploadFileWithProgress(file, file.webkitRelativePath);
+			await uploadFileWithProgress(file, (file as any).webkitRelativePath);
 		}
 
 		// 清空文件输入
@@ -696,8 +703,8 @@
 			uploadingFiles.add(file.name);
 			uploadingFiles = uploadingFiles; // 触发响应式更新
 
-			// 使用简单的上传API
-			await api.uploadRepositoryFile(username, repoName, file);
+			// 使用带进度的上传流程（包含冲突检查）
+			await uploadFileWithProgress(file);
 
 			// 上传成功后重新加载文件列表
 			await loadRepositoryData();
@@ -710,10 +717,61 @@
 		}
 	}
 
-	async function uploadFileWithProgress(file, relativePath = null) {
+	// 处理用户确认替换
+	async function handleConfirmReplace() {
+		showConfirmDialog = false;
+		const { file, relativePath } = confirmDialogData;
+
+		try {
+			// 直接调用上传函数，传入confirmed=true跳过冲突检查
+			await uploadFileWithProgress(file, relativePath, true);
+		} catch (error) {
+			console.error('Upload failed:', error);
+			alert(`上传文件 ${file.name} 失败：${error.message}`);
+		}
+
+		confirmDialogData = null;
+	}
+
+	// 处理用户取消替换
+	function handleCancelReplace() {
+		showConfirmDialog = false;
+		const { file, relativePath } = confirmDialogData;
+		const fileName = relativePath || file.name;
+
+		// 清理进度状态
+		if (uploadProgress[fileName]) {
+			delete uploadProgress[fileName];
+			uploadProgress = { ...uploadProgress };
+		}
+
+		// 从上传列表中移除文件
+		uploadingFiles.delete(file.name);
+		uploadingFiles = uploadingFiles;
+
+		confirmDialogData = null;
+	}
+
+	async function uploadFileWithProgress(file, relativePath = null, confirmed = false) {
 		const fileName = relativePath || file.name;
 
 		try {
+			// 如果未确认，先检查冲突
+			if (!confirmed) {
+				const conflictResult = await api.checkUploadConflict(username, repoName, fileName);
+
+				// 如果有冲突，显示确认对话框
+				if (conflictResult.has_conflict) {
+					confirmDialogData = {
+						file: file,
+						relativePath: relativePath,
+						conflictData: conflictResult
+					};
+					showConfirmDialog = true;
+					return; // 等待用户确认，不继续上传
+				}
+			}
+
 			// 初始化进度
 			uploadProgress[fileName] = {
 				loaded: 0,
@@ -723,6 +781,32 @@
 			};
 			uploadProgress = { ...uploadProgress };
 
+			// 使用XMLHttpRequest上传文件
+			await uploadFileWithXHR(file, relativePath, confirmed);
+
+			// 上传成功后重新加载文件列表
+			await loadRepositoryData();
+		} catch (error) {
+			console.error('Upload failed:', error);
+
+			// 更新进度状态为错误
+			if (uploadProgress[fileName]) {
+				uploadProgress[fileName] = {
+					...uploadProgress[fileName],
+					status: 'error'
+				};
+				uploadProgress = { ...uploadProgress };
+			}
+			alert(`上传文件 ${fileName} 失败：${error.message}`);
+		}
+	}
+
+	// XMLHttpRequest上传实现
+	async function uploadFileWithXHR(file, relativePath = null, confirmed = false) {
+		const fileName = relativePath || file.name;
+		const confirmParam = confirmed ? '&confirmed=true' : '';
+
+		return new Promise((resolve, reject) => {
 			// 创建FormData
 			const formData = new FormData();
 			formData.append('file', file);
@@ -762,12 +846,15 @@
 						delete uploadProgress[fileName];
 						uploadProgress = { ...uploadProgress };
 					}, 2000);
+
+					resolve(JSON.parse(xhr.responseText));
 				} else {
 					uploadProgress[fileName] = {
 						...uploadProgress[fileName],
 						status: 'error'
 					};
 					uploadProgress = { ...uploadProgress };
+					reject(new Error(`Upload failed with status ${xhr.status}`));
 				}
 			});
 
@@ -778,46 +865,22 @@
 					status: 'error'
 				};
 				uploadProgress = { ...uploadProgress };
+				reject(new Error('网络错误'));
 			});
 
 			// 发送请求
 			const token = api.getToken();
 			xhr.open(
 				'POST',
-				`/api/repositories/${username}/${repoName}/upload?file_path=${encodeURIComponent(fileName)}`
+				`/api/repositories/${username}/${repoName}/upload?file_path=${encodeURIComponent(
+					fileName
+				)}${confirmParam}`
 			);
 			if (token) {
 				xhr.setRequestHeader('Authorization', `Bearer ${token}`);
 			}
-
-			await new Promise((resolve, reject) => {
-				xhr.addEventListener('load', () => {
-					if (xhr.status === 200) {
-						resolve();
-					} else {
-						reject(new Error(`Upload failed with status ${xhr.status}`));
-					}
-				});
-				xhr.addEventListener('error', reject);
-				xhr.send(formData);
-			});
-
-			// 上传成功后重新加载文件列表
-			await loadRepositoryData();
-		} catch (error) {
-			console.error('Upload failed:', error);
-
-			// 更新进度状态为错误
-			if (uploadProgress[fileName]) {
-				uploadProgress[fileName] = {
-					...uploadProgress[fileName],
-					status: 'error'
-				};
-				uploadProgress = { ...uploadProgress };
-			}
-
-			alert(`上传文件 ${fileName} 失败：${error.message}`);
-		}
+			xhr.send(formData);
+		});
 	}
 
 	async function handleDeleteRepository() {
@@ -1134,6 +1197,12 @@
 	function handleImageDeleted(event) {
 		showNotification(`镜像已删除`, 'success');
 		// The ImageList component will handle reloading its own data
+	}
+
+	// 获取文件夹名称的辅助函数
+	function getFolderName(file) {
+		const relativePath = file?.webkitRelativePath;
+		return relativePath ? relativePath.split('/')[0] : '文件夹';
 	}
 </script>
 
@@ -2207,7 +2276,7 @@
 				<h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">确认上传文件</h3>
 
 				<div class="mb-4">
-					{#if pendingFiles.isFolder}
+					{#if pendingFilesIsFolder}
 						<p class="text-sm text-gray-600 dark:text-gray-300 mb-2">
 							将要上传文件夹及其内容（共 {pendingFiles.length} 个文件）：
 						</p>
@@ -2217,7 +2286,7 @@
 								<FolderOpen class="h-5 w-5 text-blue-600 mr-2" />
 								<div>
 									<div class="text-sm font-medium text-gray-900 dark:text-white">
-										{pendingFiles[0]?.webkitRelativePath?.split('/')[0] || '文件夹'}
+										{getFolderName(pendingFiles[0])}
 									</div>
 									<div class="text-xs text-gray-500 dark:text-gray-400">
 										包含 {pendingFiles.length} 个文件
@@ -2284,6 +2353,63 @@
 		on:created={handleImageServiceCreated}
 		on:close={() => (showServiceFromImageModal = false)}
 	/>
+{/if}
+
+<!-- 确认替换对话框 -->
+{#if showConfirmDialog && confirmDialogData}
+	<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+		<div class="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+			<div class="flex items-center mb-4">
+				<AlertCircle class="w-6 h-6 text-orange-500 mr-3" />
+				<h3 class="text-lg font-semibold text-gray-900 dark:text-white">确认替换文件</h3>
+			</div>
+
+			<div class="mb-6">
+				<p class="text-gray-600 dark:text-gray-300 mb-3">
+					{#if confirmDialogData.conflictData.is_special_file}
+						检测到特殊文件冲突。此文件将会替换现有的同名文件，是否继续？
+					{:else}
+						检测到文件冲突，是否继续上传？
+					{/if}
+				</p>
+
+				<div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+					<p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">现有文件：</p>
+					<ul class="list-disc list-inside text-sm text-gray-600 dark:text-gray-400 mb-3">
+						{#each confirmDialogData.conflictData.existing_files as existingFile}
+							<li>
+								{existingFile.file_path}
+								<span class="text-xs text-gray-500">
+									({Math.round(existingFile.file_size / 1024)}KB,
+									{new Date(existingFile.updated_at).toLocaleString()})
+								</span>
+							</li>
+						{/each}
+					</ul>
+
+					<p class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">新文件：</p>
+					<p class="text-sm text-gray-600 dark:text-gray-400">
+						{confirmDialogData.conflictData.file_path}
+					</p>
+				</div>
+			</div>
+
+			<div class="flex justify-end space-x-3">
+				<button
+					on:click={handleCancelReplace}
+					class="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+				>
+					取消
+				</button>
+				<button
+					on:click={handleConfirmReplace}
+					class="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors"
+				>
+					确认替换
+				</button>
+			</div>
+		</div>
+	</div>
 {/if}
 
 <style>

@@ -227,8 +227,16 @@ class PersonalFilesService:
     
     async def get_upload_url(self, user_id: int, filename: str, file_size: int) -> Dict[str, Any]:
         """获取文件上传URL"""
-        # 生成文件键
-        file_key = f"user_{user_id}/{self._generate_file_key(filename)}"
+        # 获取用户信息
+        user_query = select(User).where(User.id == user_id)
+        user_result = await self.db.execute(user_query)
+        user = user_result.scalar_one_or_none()
+
+        if not user:
+            raise HTTPException(status_code=404, detail="用户不存在")
+
+        # 生成文件键 - 使用新的统一路径格式
+        file_key = f"{user.username}_{user.id}/{self._generate_file_key(filename)}"
         
         # 获取预签名上传URL
         upload_url = await self.minio.get_upload_url(

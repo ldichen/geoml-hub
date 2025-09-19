@@ -454,5 +454,56 @@ class MinIOService:
 
         return await asyncio.get_event_loop().run_in_executor(self.executor, _cleanup)
 
+    async def copy_object(
+        self,
+        source_bucket: str,
+        source_object: str,
+        dest_bucket: str,
+        dest_object: str,
+        metadata: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Any]:
+        """高效地复制对象到新位置（用于重命名操作）"""
+
+        def _copy_object():
+            try:
+                from minio.commonconfig import CopySource
+
+                # 创建复制源
+                copy_source = CopySource(source_bucket, source_object)
+
+                # 执行复制操作
+                result = self.client.copy_object(
+                    bucket_name=dest_bucket,
+                    object_name=dest_object,
+                    source=copy_source,
+                    metadata=metadata,
+                )
+
+                return {
+                    "success": True,
+                    "etag": result.etag,
+                    "source": f"{source_bucket}/{source_object}",
+                    "destination": f"{dest_bucket}/{dest_object}",
+                }
+
+            except S3Error as e:
+                logger.error(f"MinIO copy object failed: {e}")
+                return {
+                    "success": False,
+                    "error": str(e),
+                    "source": f"{source_bucket}/{source_object}",
+                    "destination": f"{dest_bucket}/{dest_object}",
+                }
+            except Exception as e:
+                logger.error(f"Unexpected error during copy: {e}")
+                return {
+                    "success": False,
+                    "error": str(e),
+                    "source": f"{source_bucket}/{source_object}",
+                    "destination": f"{dest_bucket}/{dest_object}",
+                }
+
+        return await asyncio.get_event_loop().run_in_executor(self.executor, _copy_object)
+
 # 创建全局MinIO服务实例
 minio_service = MinIOService()
