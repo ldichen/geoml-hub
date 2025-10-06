@@ -219,6 +219,20 @@ class FileUploadService:
             await self.db.commit()
             await self.db.refresh(repository_file)
 
+            # 更新用户存储使用量
+            try:
+                from app.services.storage_service import storage_service
+                repository_query = await self.db.execute(
+                    select(Repository).where(Repository.id == session.repository_id)
+                )
+                repository = repository_query.scalar_one_or_none()
+                if repository:
+                    await storage_service.increment_user_storage(
+                        self.db, repository.owner_id, session.file_size
+                    )
+            except Exception as storage_error:
+                logger.warning(f"Failed to update user storage: {storage_error}")
+
             logger.info(
                 f"Upload completed for session {session_id}, file: {session.file_name}"
             )

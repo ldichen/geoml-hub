@@ -22,10 +22,10 @@
         try {
             loading = true;
             const [healthResponse, infoResponse] = await Promise.all([
-                api.admin.getSystemHealth(),
-                api.admin.getSystemInfo()
+                api.getAdminSystemHealth(),
+                api.getAdminSystemInfo()
             ]);
-            
+
             healthData = healthResponse;
             systemInfo = infoResponse;
         } catch (err) {
@@ -38,7 +38,7 @@
     async function loadLogs() {
         try {
             logsLoading = true;
-            const response = await api.admin.getSystemLogs({
+            const response = await api.getAdminSystemLogs({
                 level: logLevel,
                 limit: logLimit
             });

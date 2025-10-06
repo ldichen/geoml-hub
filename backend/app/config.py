@@ -47,7 +47,7 @@ class Settings(BaseSettings):
     # Token Configuration
     refresh_token_expire_days: int = 7  # 7 days
     access_token_expire_minutes: int = (
-        30  # Override the previous definition with more explicit name
+        720  # Override the previous definition with more explicit name
     )
 
     # mManager Configuration

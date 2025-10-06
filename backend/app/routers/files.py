@@ -301,6 +301,15 @@ async def delete_file(
         # 提交数据库事务
         await db.commit()
 
+        # 更新用户存储使用量
+        try:
+            from app.services.storage_service import storage_service
+            await storage_service.increment_user_storage(
+                db, repository.owner_id, -file.file_size  # 负数表示减少
+            )
+        except Exception as storage_error:
+            logger.warning(f"Failed to update user storage: {storage_error}")
+
         # 最后删除MinIO文件（如果失败不影响用户体验）
         try:
             await minio_service.delete_file(

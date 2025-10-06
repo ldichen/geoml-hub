@@ -3,6 +3,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/utils/api.js';
+	import { marked } from 'marked';
 	
 	import { Star, Download, Eye, Calendar, FileText, ChevronRight } from 'lucide-svelte';
 	import { formatDistanceToNow } from 'date-fns';
@@ -280,71 +281,54 @@
 	}
 
 	
-	// 简单的Markdown渲染函数（用于Preview模式）
+	// 统一的Markdown渲染函数（与仓库主页保持一致）
 	function renderMarkdown(content) {
 		if (!content) return '';
-		
-		// 处理metadata块（YAML front matter）
-		let html = content;
+
+		// 处理YAML front matter
 		const metadataMatch = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
-		
+
 		if (metadataMatch) {
 			const metadata = metadataMatch[1];
 			const bodyContent = metadataMatch[2];
-			
-			// 渲染metadata
+
+			// 渲染metadata块（保留特殊样式）
 			const metadataHtml = `<div class="metadata-block bg-gray-800 text-gray-100 p-4 rounded-lg mb-6 font-mono text-sm border border-gray-600">
 				<div class="inline-block bg-gray-700 text-gray-200 px-2 py-1 rounded text-xs mb-3 font-semibold">metadata</div>
 				<pre class="whitespace-pre-wrap text-gray-100">${highlightYaml(metadata.trim())}</pre>
 			</div>`;
-			
-			// 渲染markdown内容
-			html = metadataHtml + renderMarkdownContent(bodyContent);
+
+			// 使用marked.js渲染markdown内容
+			let html = marked(bodyContent);
+
+			// 应用与仓库主页相同的后处理
+			html = processMarkdownHtml(html);
+
+			return metadataHtml + html;
 		} else {
-			html = renderMarkdownContent(content);
+			// 没有YAML front matter，直接使用marked.js
+			let html = marked(content);
+			return processMarkdownHtml(html);
 		}
-		
-		return html;
 	}
-	
-	// 渲染markdown内容（不包括metadata）
-	function renderMarkdownContent(content) {
-		let html = content
-			// 标题
-			.replace(/^### (.*$)/gim, '<h3 class="text-lg font-semibold text-gray-900 mt-6 mb-3">$1</h3>')
-			.replace(/^## (.*$)/gim, '<h2 class="text-xl font-semibold text-gray-900 mt-8 mb-4">$1</h2>')
-			.replace(/^# (.*$)/gim, '<h1 class="text-2xl font-bold text-gray-900 mt-8 mb-6">$1</h1>')
-			// 图片处理（需要在链接处理之前）
-			.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, src) => {
-				// 处理相对路径图片
-				if (!src.startsWith('http') && !src.startsWith('/')) {
-					const cleanPath = src.replace(/^\.\//, '');
-					src = `/api/repositories/${username}/${repositoryName}/raw/${cleanPath}`;
-				}
-				const imgTag = `<img src="${src}" alt="${alt}" class="max-w-full h-auto my-4 rounded shadow" />`;
-				return imgTag;
-			})
-			// 链接
-			.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="text-blue-600 hover:text-blue-800 underline">$1</a>')
-			// 代码块
-			.replace(/```[\s\S]*?```/g, (match) => {
-				const code = match.replace(/```/g, '').trim();
-				return `<pre class="bg-gray-100 text-gray-900 p-4 rounded-lg overflow-x-auto my-4"><code class="text-sm text-gray-900">${code}</code></pre>`;
-			})
-			// 行内代码
-			.replace(/`([^`]+)`/g, '<code class="bg-gray-100 text-gray-900 px-1 py-0.5 rounded text-sm font-mono">$1</code>')
-			// 列表项
-			.replace(/^\s*[-*+]\s+(.*)$/gim, '<li class="ml-4">$1</li>')
-			// 数字列表
-			.replace(/^\s*\d+\.\s+(.*)$/gim, '<li class="ml-4">$1</li>')
-			// 段落
-			.replace(/\n\n/g, '</p><p class="mb-4">');
-		
-		// 包装段落
-		if (html && !html.startsWith('<')) {
-			html = '<p class="mb-4">' + html + '</p>';
-		}
-		
+
+	// 后处理HTML（与仓库主页processMarkdown保持一致）
+	function processMarkdownHtml(html) {
+		// 为表格添加滚动容器
+		html = html.replace(/<table>/g, '<div class="table-container"><table>');
+		html = html.replace(/<\/table>/g, '</table></div>');
+
+		// 处理相对路径的图片引用，转换为正确的API端点
+		html = html.replace(
+			/<img([^>]*?)src=["']((?!https?:\/\/)(?!\/)\.?\/?[^"']+)["']/gi,
+			(match, attributes, imagePath) => {
+				// 移除开头的 ./ 如果存在
+				const cleanPath = imagePath.replace(/^\.\//, '');
+				const newSrc = `/api/repositories/${username}/${repositoryName}/raw/${cleanPath}`;
+				return `<img${attributes}src="${newSrc}"`;
+			}
+		);
+
 		return html;
 	}
 	
@@ -878,9 +862,11 @@
 						{:else if isMarkdownFile(fileInfo.filename)}
 							<!-- Markdown文件显示 -->
 							{#if currentMarkdownView === 'preview'}
-								<!-- Markdown预览模式 -->
-								<div class="p-6 prose prose-gray max-w-none">
-									{@html renderMarkdown(fileContent)}
+								<!-- Markdown预览模式 - 与仓库主页统一样式 -->
+								<div class="prose prose-gray dark:prose-invert max-w-none overflow-hidden">
+									<div class="model-card-content p-6">
+										{@html renderMarkdown(fileContent)}
+									</div>
 								</div>
 							{:else}
 								<!-- Markdown代码模式 -->
@@ -1122,5 +1108,129 @@
 		color: #6a9955;
 		font-style: italic;
 	}
-	
+
+	/* Model Card Content Styles - 与仓库主页统一 */
+	.model-card-content {
+		width: 100%;
+		overflow-wrap: break-word;
+		word-wrap: break-word;
+	}
+
+	/* 表格滚动样式 */
+	.model-card-content :global(table) {
+		display: table;
+		width: max-content;
+		min-width: 100%;
+		border-collapse: collapse;
+		margin-bottom: 1rem;
+		white-space: nowrap;
+	}
+
+	.model-card-content :global(.table-container) {
+		overflow-x: auto;
+		margin-bottom: 1rem;
+		border: 1px solid #e5e7eb;
+		border-radius: 0.375rem;
+		scrollbar-width: thin;
+		scrollbar-color: #64748b #f1f5f9;
+	}
+
+	.dark .model-card-content :global(.table-container) {
+		border-color: #374151;
+		scrollbar-color: #64748b #1f2937;
+	}
+
+	.model-card-content :global(.table-container)::-webkit-scrollbar {
+		height: 8px;
+	}
+
+	.model-card-content :global(.table-container)::-webkit-scrollbar-track {
+		background: #f1f5f9;
+		border-radius: 4px;
+	}
+
+	.dark .model-card-content :global(.table-container)::-webkit-scrollbar-track {
+		background: #1f2937;
+	}
+
+	.model-card-content :global(.table-container)::-webkit-scrollbar-thumb {
+		background: #64748b;
+		border-radius: 4px;
+	}
+
+	.model-card-content :global(.table-container)::-webkit-scrollbar-thumb:hover {
+		background: #94a3b8;
+	}
+
+	.model-card-content :global(table th),
+	.model-card-content :global(table td) {
+		border: 1px solid #e5e7eb;
+		padding: 0.75rem;
+		text-align: left;
+		white-space: nowrap;
+		min-width: 120px;
+	}
+
+	.dark .model-card-content :global(table th),
+	.dark .model-card-content :global(table td) {
+		border-color: #374151;
+	}
+
+	.model-card-content :global(table th) {
+		background-color: #f8fafc;
+		font-weight: 600;
+	}
+
+	.dark .model-card-content :global(table th) {
+		background-color: #1e293b;
+	}
+
+	/* 图片响应式 */
+	.model-card-content :global(img) {
+		max-width: 100%;
+		height: auto;
+	}
+
+	/* 长文本换行 */
+	.model-card-content :global(p),
+	.model-card-content :global(div),
+	.model-card-content :global(span) {
+		word-wrap: break-word;
+		overflow-wrap: break-word;
+	}
+
+	/* metadata块在model-card-content中的特殊处理 */
+	.model-card-content :global(.metadata-block) {
+		margin-bottom: 1.5rem;
+	}
+
+	/* Prose 自定义样式 - 与仓库主页保持一致 */
+	.prose :global(code) {
+		color: #1e293b;
+		font-size: 0.875rem;
+		font-family: 'Fira Code', 'Monaco', 'Cascadia Code', 'Roboto Mono', monospace;
+	}
+
+	.dark .prose :global(code) {
+		color: #f1f5f9;
+	}
+
+	.prose :global(pre) {
+		background-color: #f1f5f9;
+		color: #1e293b;
+		padding: 1.25rem;
+		border-radius: 0.5rem;
+		overflow-x: auto;
+		margin-bottom: 1.5rem;
+		border: 1px solid #e2e8f0;
+		font-family: 'Fira Code', 'Monaco', 'Cascadia Code', 'Roboto Mono', monospace;
+		line-height: 1.5;
+	}
+
+	.dark .prose :global(pre) {
+		background-color: #374151;
+		color: #f9fafb;
+		border-color: #4b5563;
+	}
+
 </style>

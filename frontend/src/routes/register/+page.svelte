@@ -91,7 +91,7 @@
             
             if (response.success) {
                 // 注册成功，自动登录
-                authLogin(response.data.access_token, response.data.user);
+                authLogin(response.data.access_token, response.data.user, response.data.refresh_token);
                 goto('/');
             } else {
                 error = response.error || $_('auth.registration_failed');

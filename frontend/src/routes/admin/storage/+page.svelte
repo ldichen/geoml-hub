@@ -15,7 +15,7 @@
     async function loadStorageStats() {
         try {
             loading = true;
-            const response = await api.admin.getStorageStats();
+            const response = await api.getAdminStorageStats();
             storageStats = response;
         } catch (err) {
             error = err.message;
@@ -27,7 +27,7 @@
     async function performCleanup(options = {}) {
         try {
             cleanupLoading = true;
-            const response = await api.admin.performStorageCleanup(options);
+            const response = await api.performAdminStorageCleanup(options);
             cleanupResult = response;
             
             // 清理完成后重新加载统计数据

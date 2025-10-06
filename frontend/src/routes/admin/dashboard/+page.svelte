@@ -15,10 +15,10 @@
         try {
             loading = true;
             const [dashboardResponse, healthResponse] = await Promise.all([
-                api.admin.getDashboard(),
-                api.admin.getSystemHealth()
+                api.getAdminDashboard(),
+                api.getAdminSystemHealth()
             ]);
-            
+
             dashboardData = dashboardResponse;
             healthData = healthResponse;
         } catch (err) {

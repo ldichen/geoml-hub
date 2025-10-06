@@ -3,7 +3,7 @@ Authentication service for handling JWT tokens and user authentication
 Enhanced with OpenGMS user server integration
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 from jose import JWTError, jwt
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -42,13 +42,13 @@ class AuthService:
         """
         to_encode = data.copy()
         if expires_delta:
-            expire = datetime.utcnow() + expires_delta
+            expire = datetime.now(timezone.utc) + expires_delta
         else:
-            expire = datetime.utcnow() + timedelta(
+            expire = datetime.now(timezone.utc) + timedelta(
                 minutes=settings.access_token_expire_minutes
             )
 
-        to_encode.update({"exp": expire, "iat": datetime.utcnow()})
+        to_encode.update({"exp": expire, "iat": datetime.now(timezone.utc)})
         encoded_jwt = jwt.encode(
             to_encode, settings.jwt_secret_key, algorithm=settings.algorithm
         )
@@ -179,140 +179,140 @@ class AuthService:
         logger.info(f"Tokens revoked for user {user_id}")
         return True
 
-    async def register_with_opengms(self, email: str, password: str, **kwargs) -> Dict[str, Any]:
+    async def register_with_opengms(
+        self, email: str, password: str, **kwargs
+    ) -> Dict[str, Any]:
         """
         在OpenGMS用户服务器注册用户并同步到本地
-        
+
         Args:
             email: 用户邮箱
             password: 原始密码
             **kwargs: 其他用户信息
-            
+
         Returns:
             Dict包含注册结果
         """
         # 1. 在OpenGMS用户服务器注册
-        register_result = await opengms_user_service.register_user(email, password, **kwargs)
-        
+        register_result = await opengms_user_service.register_user(
+            email, password, **kwargs
+        )
+
         if not register_result["success"]:
             return register_result
-        
+
         # 2. 获取OAuth2 token
         token_result = await opengms_user_service.get_oauth2_token(email, password)
-        
+
         if not token_result["success"]:
             return {
                 "success": False,
                 "message": "注册成功但登录失败，请手动登录",
-                "data": None
+                "data": None,
             }
-        
+
         # 3. 获取用户信息
         access_token = token_result["data"]["access_token"]
-        user_info_result = await opengms_user_service.get_user_info(access_token, "127.0.0.1")
-        
+        user_info_result = await opengms_user_service.get_user_info(
+            access_token, "127.0.0.1"
+        )
+
         if not user_info_result["success"]:
             return {
                 "success": False,
                 "message": "注册成功但获取用户信息失败",
-                "data": None
+                "data": None,
             }
-        
+
         # 4. 同步到本地数据库
         local_user = await opengms_user_service.sync_user_to_local(
             self.db, user_info_result["data"]
         )
-        
+
         if not local_user:
-            return {
-                "success": False,
-                "message": "用户信息同步失败",
-                "data": None
-            }
-        
+            return {"success": False, "message": "用户信息同步失败", "data": None}
+
         # 5. 生成内部JWT token
         internal_token = await self.create_user_token(local_user)
-        
+
         from app.schemas.user import UserPublic
-        
+
         return {
             "success": True,
             "message": "注册成功",
             "data": {
                 "user": UserPublic.model_validate(local_user).model_dump(),
                 "access_token": internal_token,
-                "opengms_token": token_result["data"]
-            }
+                "opengms_token": token_result["data"],
+            },
         }
-    
-    async def login_with_opengms(self, email: str, password: str, ip_address: str = "") -> Dict[str, Any]:
+
+    async def login_with_opengms(
+        self, email: str, password: str, ip_address: str = ""
+    ) -> Dict[str, Any]:
         """
         使用OpenGMS用户服务器进行登录
-        
+
         Args:
             email: 用户邮箱
             password: 原始密码
             ip_address: 客户端IP地址
-            
+
         Returns:
             Dict包含登录结果
         """
         # 1. 获取OAuth2 token
-        token_result = await opengms_user_service.get_oauth2_token(email, password, ip_address)
-        
+        token_result = await opengms_user_service.get_oauth2_token(
+            email, password, ip_address
+        )
+
         if not token_result["success"]:
             return token_result
-        
+
         # 2. 获取用户信息
         access_token = token_result["data"]["access_token"]
-        user_info_result = await opengms_user_service.get_user_info(access_token, ip_address)
-        
+        user_info_result = await opengms_user_service.get_user_info(
+            access_token, ip_address
+        )
+
         if not user_info_result["success"]:
-            return {
-                "success": False,
-                "message": "获取用户信息失败",
-                "data": None
-            }
-        
+            return {"success": False, "message": "获取用户信息失败", "data": None}
+
         # 3. 同步到本地数据库
         local_user = await opengms_user_service.sync_user_to_local(
             self.db, user_info_result["data"]
         )
-        
+
         if not local_user:
-            return {
-                "success": False,
-                "message": "用户信息同步失败",
-                "data": None
-            }
-        
+            return {"success": False, "message": "用户信息同步失败", "data": None}
+
         # 4. 生成内部JWT token
         internal_token = await self.create_user_token(local_user)
-        
+
         from app.schemas.user import UserPublic
-        
+
         return {
             "success": True,
             "message": "登录成功",
             "data": {
                 "user": UserPublic.model_validate(local_user).model_dump(),
                 "access_token": internal_token,
-                "opengms_token": token_result["data"]
-            }
+                "opengms_token": token_result["data"],
+            },
         }
-    
+
     async def refresh_opengms_token(self, refresh_token: str) -> Dict[str, Any]:
         """
         刷新OpenGMS访问令牌
-        
+
         Args:
             refresh_token: OpenGMS刷新令牌
-            
+
         Returns:
             Dict包含新的token信息
         """
         return await opengms_user_service.refresh_token(refresh_token)
-    
+
     def validate_external_token(self, external_token: str) -> Optional[Dict[str, Any]]:
         """
         Validate token from external authentication service
@@ -322,32 +322,33 @@ class AuthService:
 
         Returns:
             Dict: User information from external service or None if invalid
-        """        
+        """
         try:
             # Decode JWT token with external auth secret key
             payload = jwt.decode(
-                external_token, 
-                settings.external_auth_secret_key, 
-                algorithms=["HS256"]
+                external_token, settings.external_auth_secret_key, algorithms=["HS256"]
             )
-            
+
             # Extract user information from payload
             user_info = {
                 "external_user_id": payload.get("sub"),
-                "username": payload.get("username") or payload.get("preferred_username"),
+                "username": payload.get("username")
+                or payload.get("preferred_username"),
                 "email": payload.get("email"),
                 "display_name": payload.get("name") or payload.get("display_name"),
                 "avatar_url": payload.get("avatar_url") or payload.get("picture"),
             }
-            
+
             # Validate required fields
             if not user_info.get("external_user_id") or not user_info.get("email"):
                 logger.warning(f"Invalid external token: missing required fields")
                 return None
-                
-            logger.info(f"Successfully validated external token for user: {user_info.get('username')}")
+
+            logger.info(
+                f"Successfully validated external token for user: {user_info.get('username')}"
+            )
             return user_info
-            
+
         except JWTError as e:
             logger.error(f"JWT validation failed: {str(e)}")
             return None

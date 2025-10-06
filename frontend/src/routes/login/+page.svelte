@@ -31,8 +31,8 @@
             
             if (response.success) {
                 // 登录成功，保存token和用户信息
-                authLogin(response.data.access_token, response.data.user);
-                
+                authLogin(response.data.access_token, response.data.user, response.data.refresh_token);
+
                 // 重定向到原来想访问的页面或首页
                 const redirectTo = new URLSearchParams(window.location.search).get('redirect') || '/';
                 goto(redirectTo);

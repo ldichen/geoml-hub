@@ -32,14 +32,14 @@
                 skip: (currentPage - 1) * pageSize,
                 limit: pageSize,
                 search: searchTerm || undefined,
-                status: statusFilter !== 'all' ? statusFilter : undefined,
+                is_active: statusFilter !== 'all' ? (statusFilter === 'active') : undefined,
                 repo_type: typeFilter !== 'all' ? typeFilter : undefined,
                 visibility: visibilityFilter !== 'all' ? visibilityFilter : undefined,
                 sort_by: sortBy,
                 order: sortOrder
             };
 
-            const response = await api.listRepositories(params);
+            const response = await api.getAdminRepositories(params);
             repositories = response.repositories || [];
             totalRepositories = response.total || 0;
         } catch (err) {
@@ -51,7 +51,7 @@
 
     async function loadStats() {
         try {
-            const response = await api.admin.getRepositoryStats();
+            const response = await api.getAdminRepositoryStats();
             stats = response;
         } catch (err) {
             console.error('Failed to load stats:', err);
@@ -87,7 +87,7 @@
     async function updateRepositoryStatus(repoId, field, value) {
         try {
             modalLoading = true;
-            await api.admin.updateRepositoryStatus(repoId, { [field]: value });
+            await api.updateAdminRepositoryStatus(repoId, { [field]: value });
             
             // Update local data
             const repoIndex = repositories.findIndex(r => r.id === repoId);
@@ -111,7 +111,7 @@
     async function restoreRepository(repoId) {
         try {
             modalLoading = true;
-            await api.admin.restoreRepository(repoId);
+            await api.restoreAdminRepository(repoId);
             
             // Update local data
             const repoIndex = repositories.findIndex(r => r.id === repoId);
@@ -142,7 +142,7 @@
 
         try {
             modalLoading = true;
-            await api.admin.hardDeleteRepository(selectedRepo.id, true);
+            await api.hardDeleteAdminRepository(selectedRepo.id, true);
             
             // Remove from local data
             repositories = repositories.filter(r => r.id !== selectedRepo.id);
@@ -377,6 +377,20 @@
                                 {/if}
                             </th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                                on:click={() => handleSort('views_count')}>
+                                浏览量
+                                {#if sortBy === 'views_count'}
+                                    <span class="ml-1">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                                {/if}
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                                on:click={() => handleSort('downloads_count')}>
+                                下载量
+                                {#if sortBy === 'downloads_count'}
+                                    <span class="ml-1">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                                {/if}
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
                                 on:click={() => handleSort('total_size')}>
                                 大小
                                 {#if sortBy === 'total_size'}
@@ -400,9 +414,18 @@
                             <tr class="hover:bg-gray-50">
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div class="flex items-center">
-                                        <div class="text-2xl mr-3">{getTypeIcon(repo.repo_type)}</div>
+                                        <img
+                                            src={repo.owner?.avatar_url || '/default-avatar.png'}
+                                            alt={repo.owner?.username || 'User'}
+                                            class="w-10 h-10 rounded-full mr-3"
+                                        />
                                         <div>
-                                            <div class="text-sm font-medium text-gray-900">{repo.name}</div>
+                                            <a
+                                                href="/{repo.owner?.username || 'unknown'}/{repo.name}"
+                                                class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                                            >
+                                                {repo.owner?.username || 'unknown'}/{repo.name}
+                                            </a>
                                             <div class="text-sm text-gray-500">{repo.description || 'No description'}</div>
                                         </div>
                                     </div>
@@ -420,6 +443,12 @@
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     {repo.stars_count || 0}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    {repo.views_count || 0}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    {repo.downloads_count || 0}
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                                     {formatBytes(repo.total_size || 0)}

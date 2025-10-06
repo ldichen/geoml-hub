@@ -33,6 +33,20 @@ class ApiClient {
 		if (!browser) return;
 		localStorage.removeItem('authToken');
 		localStorage.removeItem('user');
+		localStorage.removeItem('refreshToken');
+	}
+
+	async handleTokenExpired() {
+		if (!browser) return { success: false, error: 'Not in browser environment' };
+
+		try {
+			// 动态导入以避免循环依赖
+			const { refreshTokenSilently } = await import('$lib/utils/auth.js');
+			return await refreshTokenSilently();
+		} catch (error) {
+			console.error('Failed to handle token expiration:', error);
+			return { success: false, error: error.message };
+		}
 	}
 
 	// ================== Base request method ==================
@@ -65,16 +79,33 @@ class ApiClient {
 			const response = await fetch(url, config);
 
 			if (response.status === 401) {
-				// Token expired or invalid, clear it and redirect to login
-				this.clearToken();
-				if (browser) {
-					goto('/login');
-				}
+				// Token expired or invalid, try to refresh first
+				const refreshResult = await this.handleTokenExpired();
 
-				// 创建统一的认证错误
-				const authError = new Error('Authentication required');
-				authError.response = { status: 401, data: {} };
-				throw authError;
+				if (refreshResult.success) {
+					// Token刷新成功，重试原请求
+					const retryConfig = {
+						...config,
+						headers: {
+							...config.headers,
+							Authorization: `Bearer ${localStorage.getItem('authToken')}`
+						}
+					};
+					return await fetch(url, retryConfig);
+				} else {
+					// 刷新失败，清除token并跳转登录
+					this.clearToken();
+					if (browser) {
+						const { logout } = await import('$lib/stores/auth.js');
+						logout();
+						goto('/login');
+					}
+
+					// 创建统一的认证错误
+					const authError = new Error('Authentication required');
+					authError.response = { status: 401, data: {} };
+					throw authError;
+				}
 			}
 
 			if (!response.ok) {
@@ -82,7 +113,9 @@ class ApiClient {
 				const errorData = await response.json().catch(() => ({}));
 
 				// 创建包含完整错误信息的错误对象
-				const error = new Error(errorData.error?.message || errorData.message || `HTTP ${response.status}`);
+				const error = new Error(
+					errorData.error?.message || errorData.message || `HTTP ${response.status}`
+				);
 				error.response = {
 					status: response.status,
 					data: errorData
@@ -136,16 +169,28 @@ class ApiClient {
 			}
 
 			// Set up response handling
-			xhr.onload = function () {
+			xhr.onload = async () => {
 				try {
 					if (xhr.status === 401) {
-						// Token expired or invalid, clear it and redirect to login
-						if (browser) {
-							localStorage.removeItem('authToken');
-							localStorage.removeItem('user');
-							goto('/login');
+						// Token expired or invalid, try to refresh first
+						const refreshResult = await this.handleTokenExpired();
+
+						if (refreshResult.success) {
+							// Token刷新成功，这里XMLHttpRequest比较难重试，提示用户重新操作
+							console.log('Token refreshed, please retry your upload');
+							reject(new Error('Token was refreshed, please retry the upload'));
+						} else {
+							// 刷新失败，清除token并跳转登录
+							if (browser) {
+								localStorage.removeItem('authToken');
+								localStorage.removeItem('user');
+								localStorage.removeItem('refreshToken');
+								const { logout } = await import('$lib/stores/auth.js');
+								logout();
+								goto('/login');
+							}
+							reject(new Error('Authentication required'));
 						}
-						reject(new Error('Authentication required'));
 						return;
 					}
 
@@ -187,7 +232,7 @@ class ApiClient {
 				}
 			};
 
-			xhr.onerror = function () {
+			xhr.onerror = () => {
 				resolve({
 					success: false,
 					error: '网络错误，请检查连接',
@@ -195,7 +240,7 @@ class ApiClient {
 				});
 			};
 
-			xhr.ontimeout = function () {
+			xhr.ontimeout = () => {
 				resolve({
 					success: false,
 					error: '请求超时',
@@ -317,7 +362,7 @@ class ApiClient {
 
 	async refreshToken(refreshToken) {
 		try {
-			const response = await this.request('/api/auth/refresh/', {
+			const response = await this.request('/api/auth/refresh', {
 				method: 'POST',
 				body: { refresh_token: refreshToken }
 			});
@@ -415,7 +460,7 @@ class ApiClient {
 	// ================== Repositories API ==================
 	async listRepositories(options = {}) {
 		const params = new URLSearchParams(options);
-		return this.request(`/api/repositories?${params}`);
+		return this.request(`/api/repositories/?${params}`);
 	}
 
 	async getRepository(owner, name) {
@@ -526,7 +571,6 @@ class ApiClient {
 		});
 	}
 
-
 	// ================== Services API ==================
 	async getRepositoryServices(owner, name, params = {}) {
 		const searchParams = new URLSearchParams();
@@ -541,7 +585,11 @@ class ApiClient {
 	async createService(owner, name, data, onProgress = null) {
 		// If it's FormData, use uploadFormData for progress support
 		if (data instanceof FormData) {
-			return this.uploadFormData(`/api/services/${owner}/${name}/create_service_from_image`, data, onProgress);
+			return this.uploadFormData(
+				`/api/services/${owner}/${name}/create_service_from_image`,
+				data,
+				onProgress
+			);
 		}
 		return this.request(`/api/services/${owner}/${name}/create_service_from_image`, {
 			method: 'POST',
@@ -550,7 +598,11 @@ class ApiClient {
 	}
 
 	async createServiceWithDockerTar(owner, name, formData, onProgress = null) {
-		return this.uploadFormData(`/api/services/${owner}/${name}/create_service_with_docker_tar`, formData, onProgress);
+		return this.uploadFormData(
+			`/api/services/${owner}/${name}/create_service_with_docker_tar`,
+			formData,
+			onProgress
+		);
 	}
 
 	async getService(serviceId) {
@@ -705,7 +757,11 @@ class ApiClient {
 	}
 
 	async uploadImage(repositoryId, formData, onProgress = null) {
-		return this.uploadFormData(`/api/images/repositories/${repositoryId}/upload`, formData, onProgress);
+		return this.uploadFormData(
+			`/api/images/repositories/${repositoryId}/upload`,
+			formData,
+			onProgress
+		);
 	}
 
 	async deleteImage(imageId, force = false) {
@@ -856,6 +912,123 @@ class ApiClient {
 				new_filename: newFilename,
 				commit_message: commitMessage
 			}
+		});
+	}
+
+	// ================== Admin API ==================
+	async getAdminDashboard() {
+		return this.request('/api/admin/dashboard');
+	}
+
+	async getAdminUsers(params = {}) {
+		const searchParams = new URLSearchParams();
+		Object.entries(params).forEach(([key, value]) => {
+			if (value !== undefined && value !== null && value !== '') {
+				searchParams.append(key, value);
+			}
+		});
+		return this.request(`/api/admin/users?${searchParams}`);
+	}
+
+	async updateAdminUserStatus(userId, data) {
+		const params = new URLSearchParams();
+		Object.entries(data).forEach(([key, value]) => {
+			if (value !== undefined && value !== null) {
+				params.append(key, value);
+			}
+		});
+		return this.request(`/api/admin/users/${userId}/status?${params}`, {
+			method: 'PUT'
+		});
+	}
+
+	async getAdminRepositories(params = {}) {
+		const searchParams = new URLSearchParams();
+		Object.entries(params).forEach(([key, value]) => {
+			if (value !== undefined && value !== null && value !== '') {
+				searchParams.append(key, value);
+			}
+		});
+		return this.request(`/api/admin/repositories?${searchParams}`);
+	}
+
+	async getAdminRepositoryStats() {
+		return this.request('/api/admin/repositories/stats');
+	}
+
+	async updateAdminRepositoryStatus(repositoryId, data) {
+		const params = new URLSearchParams();
+		Object.entries(data).forEach(([key, value]) => {
+			if (value !== undefined && value !== null) {
+				params.append(key, value);
+			}
+		});
+		return this.request(`/api/admin/repositories/${repositoryId}/status?${params}`, {
+			method: 'PUT'
+		});
+	}
+
+	async restoreAdminRepository(repositoryId) {
+		return this.request(`/api/admin/repositories/${repositoryId}/restore`, {
+			method: 'POST'
+		});
+	}
+
+	async hardDeleteAdminRepository(repositoryId, confirm = false) {
+		return this.request(`/api/admin/repositories/${repositoryId}/hard-delete?confirm=${confirm}`, {
+			method: 'DELETE'
+		});
+	}
+
+	async getAdminStorageStats() {
+		return this.request('/api/admin/storage/stats');
+	}
+
+	async performAdminStorageCleanup(options = {}) {
+		const params = new URLSearchParams();
+		Object.entries(options).forEach(([key, value]) => {
+			if (value !== undefined && value !== null) {
+				params.append(key, value);
+			}
+		});
+		return this.request(`/api/admin/storage/cleanup?${params}`, {
+			method: 'POST'
+		});
+	}
+
+	async getAdminSystemHealth() {
+		return this.request('/api/admin/system/health');
+	}
+
+	async getAdminSystemLogs(params = {}) {
+		const searchParams = new URLSearchParams();
+		Object.entries(params).forEach(([key, value]) => {
+			if (value !== undefined && value !== null && value !== '') {
+				searchParams.append(key, value);
+			}
+		});
+		return this.request(`/api/admin/logs?${searchParams}`);
+	}
+
+	async getAdminSystemConfig() {
+		return this.request('/api/admin/system/config');
+	}
+
+	async getAdminSystemInfo() {
+		return this.request('/api/admin/system/info');
+	}
+
+	async updateAdminSystemConfig(config) {
+		return this.request('/api/admin/system/config', {
+			method: 'PUT',
+			body: config
+		});
+	}
+
+	async setAdminMaintenanceMode(enabled, message = '') {
+		return this.request('/api/admin/system/maintenance', {
+			method: 'POST',
+			body: { enabled, message }
 		});
 	}
 }

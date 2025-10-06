@@ -42,7 +42,7 @@
                 params.is_verified = false;
             }
 
-            const response = await api.admin.getUsers(params);
+            const response = await api.getAdminUsers(params);
             users = response.users || [];
             totalUsers = response.total || 0;
         } catch (err) {
@@ -82,7 +82,7 @@
     async function updateUserStatus(userId, field, value) {
         try {
             modalLoading = true;
-            await api.admin.updateUserStatus(userId, { [field]: value });
+            await api.updateAdminUserStatus(userId, { [field]: value });
             
             // 更新本地数据
             const userIndex = users.findIndex(u => u.id === userId);

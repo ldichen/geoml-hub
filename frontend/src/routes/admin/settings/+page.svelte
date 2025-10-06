@@ -32,10 +32,10 @@
         try {
             loading = true;
             const [configResponse, infoResponse] = await Promise.all([
-                api.admin.getSystemConfig(),
-                api.admin.getSystemInfo()
+                api.getAdminSystemConfig(),
+                api.getAdminSystemInfo()
             ]);
-            
+
             systemConfig = configResponse;
             systemInfo = infoResponse;
         } catch (err) {
@@ -57,9 +57,9 @@
 
         try {
             saveLoading = true;
-            await api.admin.updateSystemConfig({
+            await api.updateAdminSystemConfig({
                 config_key: editingConfig.key,
-                config_value: editingConfig.type === 'boolean' ? editValue === 'true' : 
+                config_value: editingConfig.type === 'boolean' ? editValue === 'true' :
                              editingConfig.type === 'integer' ? parseInt(editValue) : editValue,
                 description: editDescription
             });
@@ -90,7 +90,7 @@
     async function toggleMaintenanceMode() {
         try {
             maintenanceLoading = true;
-            await api.admin.setMaintenanceMode(maintenanceEnabled, maintenanceMessage);
+            await api.setAdminMaintenanceMode(maintenanceEnabled, maintenanceMessage);
             
             // 更新本地数据
             const generalCategory = systemConfig.categories['general'];
