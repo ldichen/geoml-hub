@@ -58,6 +58,7 @@ class Repository(Base):
     stars = relationship("RepositoryStar", back_populates="repository", cascade="all, delete-orphan")
     views = relationship("RepositoryView", back_populates="repository", cascade="all, delete-orphan")
     classifications = relationship("RepositoryClassification", back_populates="repository", cascade="all, delete-orphan")
+    task_classifications = relationship("RepositoryTaskClassification", back_populates="repository", cascade="all, delete-orphan")
     model_services = relationship("ModelService", back_populates="repository", cascade="all, delete-orphan")
     images = relationship("Image", back_populates="repository", cascade="all, delete-orphan")
 
@@ -161,17 +162,35 @@ class RepositoryView(Base):
 class RepositoryClassification(Base):
     """仓库分类关联表"""
     __tablename__ = "repository_classifications"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     repository_id = Column(Integer, ForeignKey("repositories.id", ondelete="CASCADE"), nullable=False, index=True)
     classification_id = Column(Integer, ForeignKey("classifications.id", ondelete="CASCADE"), nullable=False, index=True)
     level = Column(Integer, nullable=False, index=True)  # 记录选择的是哪一级分类
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
+
     __table_args__ = (
         UniqueConstraint('repository_id', 'classification_id', name='unique_repo_classification'),
     )
-    
+
     # 关系
     repository = relationship("Repository", back_populates="classifications")
     classification = relationship("Classification")
+
+
+class RepositoryTaskClassification(Base):
+    """仓库-任务分类关联表"""
+    __tablename__ = "repository_task_classifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    repository_id = Column(Integer, ForeignKey("repositories.id", ondelete="CASCADE"), nullable=False, index=True)
+    task_classification_id = Column(Integer, ForeignKey("task_classifications.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint('repository_id', 'task_classification_id', name='unique_repo_task_classification'),
+    )
+
+    # 关系
+    repository = relationship("Repository", back_populates="task_classifications")
+    task_classification = relationship("TaskClassification", back_populates="repository_associations")

@@ -80,7 +80,7 @@
 
 		<div class="flex">
 			<!-- 侧边栏 -->
-			<nav class="w-64 bg-white shadow-sm h-screen">
+			<nav class="w-48 bg-white shadow-sm h-screen">
 				<div class="p-4">
 					<ul class="space-y-2">
 						{#each sidebarItems as item}

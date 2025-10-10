@@ -5,6 +5,7 @@ from app.config import settings
 from app.routers import (
     auth,
     classifications,
+    task_classifications,
     users,
     repositories,
     search,
@@ -80,6 +81,9 @@ app.add_exception_handler(Exception, global_exception_handler)
 app.include_router(auth.router, prefix="/api/auth", tags=["authentication"])
 app.include_router(
     classifications.router, prefix="/api/classifications", tags=["classifications"]
+)
+app.include_router(
+    task_classifications.router, prefix="/api/task-classifications", tags=["task-classifications"]
 )
 # v2.0 核心路由
 app.include_router(users.router, prefix="/api/users", tags=["users"])

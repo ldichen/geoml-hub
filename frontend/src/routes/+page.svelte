@@ -14,6 +14,7 @@
 	let repositories: Repository[] = [];
 	let featuredRepositories: Repository[] = [];
 	let classifications: Classification[] = [];
+	let taskClassifications: any[] = [];
 	let loading = true;
 	let error: string | null = null;
 
@@ -50,21 +51,16 @@
 
 	// Define common tags and licenses
 	const commonTags = [
-		'深度学习',
-		'计算机视觉',
-		'自然语言处理',
-		'遥感影像',
-		'地理信息系统',
-		'机器学习',
-		'数据挖掘',
-		'图像分割',
-		'目标检测',
-		'时间序列',
-		'空间分析',
-		'地图制图',
-		'卫星数据',
-		'地形分析',
-		'气候建模'
+		'Pytorch',
+		'TensorFlow',
+		'JAX',
+		'Transformers',
+		'Diffusers',
+		'Safetensors',
+		'ONNX',
+		'GGUF',
+		'keras',
+		'timm'
 	];
 
 	const commonLicenses = [
@@ -111,7 +107,12 @@
 			loading = true;
 			error = null;
 
-			const [reposResponse, featuredResponse, classificationsResponse] = await Promise.all([
+			const [
+				reposResponse,
+				featuredResponse,
+				classificationsResponse,
+				taskClassificationsResponse
+			] = await Promise.all([
 				api.listRepositories({
 					page: currentPage,
 					per_page: perPage,
@@ -131,12 +132,16 @@
 					sort_order: 'desc',
 					is_featured: true
 				}),
-				api.getClassificationTree()
+				api.getClassificationTree(),
+				fetch('/api/task-classifications/')
+					.then((r) => r.json())
+					.catch(() => ({ task_classifications: [] }))
 			]);
 
 			repositories = reposResponse.items || reposResponse;
 			featuredRepositories = featuredResponse.items || featuredResponse;
 			classifications = classificationsResponse.classifications || classificationsResponse;
+			taskClassifications = taskClassificationsResponse.task_classifications || [];
 
 			// Update pagination info
 			if (reposResponse.total !== undefined) {
@@ -409,12 +414,20 @@
 								Class
 							</button>
 							<button
+								class="py-2 px-1 border-b-2 font-semibold text-m {activeTab === 'tasks'
+									? 'border-blue-500 text-blue-600 dark:text-blue-400'
+									: 'border-transparent text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300'}"
+								on:click={() => (activeTab = 'tasks')}
+							>
+								Tasks
+							</button>
+							<button
 								class="py-2 px-1 border-b-2 font-semibold text-m {activeTab === 'tags'
 									? 'border-blue-500 text-blue-600 dark:text-blue-400'
 									: 'border-transparent text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300'}"
 								on:click={() => (activeTab = 'tags')}
 							>
-								Tags
+								Libraries
 							</button>
 							<button
 								class="py-2 px-1 border-b-2 font-semibold text-m {activeTab === 'licenses'
@@ -781,6 +794,25 @@
 									</div>
 								</div>
 							{/if}
+						</div>
+					{:else if activeTab === 'tasks'}
+						<!-- Task Classifications -->
+						<div>
+							<div class="flex items-center justify-between mb-3">
+								<h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">任务分类</h4>
+							</div>
+							<div class="flex flex-wrap gap-2">
+								{#each taskClassifications as task}
+									<button
+										class="inline-flex items-center px-3 py-1 rounded-md text-sm font-medium transition-colors border bg-white text-gray-700 border-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700"
+									>
+										<span>{task.name}</span>
+									</button>
+								{/each}
+								{#if taskClassifications.length === 0}
+									<p class="text-sm text-gray-500 dark:text-gray-400">暂无任务分类</p>
+								{/if}
+							</div>
 						</div>
 					{:else if activeTab === 'tags'}
 						<!-- Tags -->

@@ -1,7 +1,7 @@
 <script>
 	import { onMount } from 'svelte';
 	import { locale, _ } from 'svelte-i18n';
-	import { Search, Globe, Sun, Moon, Monitor, Menu, X, User, LogOut, Plus } from 'lucide-svelte';
+	import { Search, Globe, Sun, Moon, Monitor, Menu, X, User, LogOut, Plus, Settings } from 'lucide-svelte';
 	import { user, isAuthenticated, logout } from '$lib/stores/auth';
 	import { api } from '$lib/utils/api';
 	import UserAvatar from './UserAvatar.svelte';
@@ -166,6 +166,15 @@
 										<Plus class="w-4 h-4" />
 										<span>新建仓库</span>
 									</a>
+									{#if $user.is_admin}
+										<a
+											href="/admin"
+											class="flex items-center space-x-3 px-4 py-2 text-sm text-white hover:bg-gray-700 transition-colors"
+										>
+											<Settings class="w-4 h-4" />
+											<span>管理控制台</span>
+										</a>
+									{/if}
 									<hr class="my-1 border-gray-600" />
 									<button
 										class="flex items-center space-x-3 w-full px-4 py-2 text-sm text-left text-white hover:bg-gray-700 transition-colors"
@@ -218,6 +227,11 @@
 						<a href="/new" class="block px-3 py-2 text-white hover:bg-gray-700 rounded-md">
 							新建仓库
 						</a>
+						{#if $user.is_admin}
+							<a href="/admin" class="block px-3 py-2 text-white hover:bg-gray-700 rounded-md">
+								管理控制台
+							</a>
+						{/if}
 						<a
 							href="/{$user.username}"
 							class="block px-3 py-2 text-white hover:bg-gray-700 rounded-md"

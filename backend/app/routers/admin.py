@@ -236,13 +236,33 @@ async def get_admin_users(
     else:
         storage_map = {}
 
-    # 先刷新用户对象确保所有属性已加载
+    # 手动构建 UserProfile 对象，避免 MissingGreenlet 错误
+    user_profiles = []
     for user in users:
-        await db.refresh(user)
-
-    # 然后更新存储使用量（在刷新之后）
-    for user in users:
-        user.storage_used = storage_map.get(user.id, 0)
+        user_dict = {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "full_name": user.full_name,
+            "avatar_url": user.avatar_url,
+            "bio": user.bio,
+            "website": user.website,
+            "location": user.location,
+            "external_user_id": user.external_user_id,
+            "followers_count": user.followers_count,
+            "following_count": user.following_count,
+            "public_repos_count": user.public_repos_count,
+            "storage_quota": user.storage_quota,
+            "storage_used": storage_map.get(user.id, 0),  # 使用实时计算的存储
+            "is_active": user.is_active,
+            "is_verified": user.is_verified,
+            "is_admin": user.is_admin,
+            "created_at": user.created_at,
+            "updated_at": user.updated_at,
+            "last_active_at": user.last_active_at,
+            "last_seen_at": user.last_seen_at,
+        }
+        user_profiles.append(UserProfile(**user_dict))
 
     # 总数查询
     count_query = select(func.count(User.id))
@@ -264,7 +284,7 @@ async def get_admin_users(
     total = count_result.scalar() or 0
 
     return {
-        "users": [UserProfile.model_validate(user) for user in users],
+        "users": user_profiles,
         "total": total,
         "page": skip // limit + 1,
         "pages": (total + limit - 1) // limit,
