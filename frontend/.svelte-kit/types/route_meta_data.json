@@ -7,6 +7,9 @@
 		"src/routes/+layout.js",
 		"src/routes/+layout.js"
 	],
+	"/admin/classifications": [
+		"src/routes/+layout.js"
+	],
 	"/admin/dashboard": [
 		"src/routes/+layout.js"
 	],

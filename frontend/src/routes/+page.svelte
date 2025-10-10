@@ -25,6 +25,7 @@
 	let sortOrder: string = 'desc';
 	let activeTab: string = 'main';
 	let selectedClassifications: Set<number> = new Set();
+	let selectedTaskClassifications: Set<number> = new Set();
 	let selectedTags: Set<string> = new Set();
 	let selectedLicenses: Set<string> = new Set();
 	let showAllLevel1 = false;
@@ -120,6 +121,9 @@
 					sort_order: sortOrder,
 					...(selectedClassifications.size > 0 && {
 						classification_ids: Array.from(selectedClassifications)
+					}),
+					...(selectedTaskClassifications.size > 0 && {
+						task_classification_id: Array.from(selectedTaskClassifications)[0]
 					}),
 					...(selectedTags.size > 0 && { tags: Array.from(selectedTags).join(',') }),
 					...(selectedLicenses.size > 0 && { licenses: Array.from(selectedLicenses).join(',') }),
@@ -285,6 +289,23 @@
 		handleFilterChange();
 	}
 
+	function toggleTaskClassification(taskId: number) {
+		if (selectedTaskClassifications.has(taskId)) {
+			selectedTaskClassifications.delete(taskId);
+		} else {
+			selectedTaskClassifications.clear(); // 只允许选择一个
+			selectedTaskClassifications.add(taskId);
+		}
+		selectedTaskClassifications = selectedTaskClassifications;
+		handleFilterChange();
+	}
+
+	function resetTaskClassifications() {
+		selectedTaskClassifications.clear();
+		selectedTaskClassifications = selectedTaskClassifications;
+		handleFilterChange();
+	}
+
 	function toggleTag(tag: string) {
 		if (selectedTags.has(tag)) {
 			selectedTags.delete(tag);
@@ -442,7 +463,6 @@
 
 					<!-- Tab Content -->
 					{#if activeTab === 'main'}
-						<!-- Classification Tags (copied from class tab) -->
 						<div class="space-y-6">
 							<!-- Level 1 Classifications -->
 							{#if level1Classifications.length > 0}
@@ -800,12 +820,36 @@
 						<div>
 							<div class="flex items-center justify-between mb-3">
 								<h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">任务分类</h4>
+								{#if selectedTaskClassifications.size > 0}
+									<button
+										class="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
+										on:click={resetTaskClassifications}
+									>
+										<svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+											/>
+										</svg>
+										Reset
+									</button>
+								{/if}
 							</div>
 							<div class="flex flex-wrap gap-2">
 								{#each taskClassifications as task}
 									<button
-										class="inline-flex items-center px-3 py-1 rounded-md text-sm font-medium transition-colors border bg-white text-gray-700 border-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700"
+										class="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-sm font-medium transition-colors border {selectedTaskClassifications.has(
+											task.id
+										)
+											? 'bg-purple-50 text-purple-700 border-purple-300 hover:bg-purple-100 dark:bg-purple-900 dark:text-purple-300 dark:border-purple-700 dark:hover:bg-purple-800'
+											: 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700'}"
+										on:click={() => toggleTaskClassification(task.id)}
 									>
+										<!-- {#if task.icon}
+											<span>{task.icon}</span>
+										{/if} -->
 										<span>{task.name}</span>
 									</button>
 								{/each}

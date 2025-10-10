@@ -70,6 +70,9 @@ async def list_repositories(
     visibility: str = Query("public", regex="^(public|private|all)$"),
     classification_id: Optional[int] = Query(None, description="分类ID筛选"),
     classification_ids: Optional[List[int]] = Query(None, description="多个分类ID筛选"),
+    task_classification_id: Optional[int] = Query(
+        None, description="任务分类ID筛选"
+    ),  # 新增
     tags: Optional[str] = Query(None, description="标签筛选，逗号分隔"),
     licenses: Optional[str] = Query(None, description="许可证筛选，逗号分隔"),
     sort_by: str = Query(
@@ -144,6 +147,16 @@ async def list_repositories(
             RepositoryClassification.classification_id.in_(classification_ids)
         )
         query = query.where(Repository.id.in_(subquery))
+
+    # Task分类筛选（新增）
+    if task_classification_id:
+        from app.models.repository import RepositoryTaskClassification
+
+        task_subquery = select(RepositoryTaskClassification.repository_id).where(
+            RepositoryTaskClassification.task_classification_id
+            == task_classification_id
+        )
+        query = query.where(Repository.id.in_(task_subquery))
 
     # 标签筛选
     if tags:
@@ -276,6 +289,28 @@ async def get_repository(
 
     except Exception as e:
         logger.error(f"Failed to add classification path: {e}")
+
+    # 添加task_classifications字段
+    try:
+        from app.models.repository import RepositoryTaskClassification
+        from app.models import TaskClassification
+
+        # 获取仓库的task分类关联
+        task_query = (
+            select(TaskClassification)
+            .join(RepositoryTaskClassification)
+            .where(RepositoryTaskClassification.repository_id == repository.id)
+            .order_by(TaskClassification.sort_order)
+        )
+
+        result = await db.execute(task_query)
+
+        task_classifications_list = result.scalars().all()
+        repository.task_classifications_data = task_classifications_list
+
+    except Exception as e:
+        logger.error(f"Failed to add task classifications: {e}")
+        setattr(repository, "task_classifications_data", [])
 
     return repository
 
@@ -1100,7 +1135,19 @@ async def add_repository_classification(
         getattr(repository, "id"), classification_id
     )
 
-    return {"message": "分类添加成功", "classifications": classifications}
+    # 自动同步README
+    from app.services.classification_migration_service import (
+        ClassificationMigrationService,
+    )
+
+    migration_service = ClassificationMigrationService(db)
+    await migration_service.sync_repository_readme(getattr(repository, "id"))
+    await db.commit()
+
+    return {
+        "message": "分类添加成功并已同步至README",
+        "classifications": classifications,
+    }
 
 
 @router.delete("/{owner}/{repo_name}/classifications")
@@ -1126,9 +1173,128 @@ async def remove_repository_classifications(
     )
 
     if success:
-        return {"message": "仓库分类已全部移除"}
+        # 自动同步README
+        from app.services.classification_migration_service import (
+            ClassificationMigrationService,
+        )
+
+        migration_service = ClassificationMigrationService(db)
+        await migration_service.sync_repository_readme(getattr(repository, "id"))
+        await db.commit()
+
+        return {"message": "仓库分类已全部移除并已同步至README"}
     else:
         raise HTTPException(status_code=400, detail="移除分类失败")
+
+
+@router.post("/{owner}/{repo_name}/task-classifications")
+async def add_repository_task_classification(
+    owner: str = Path(..., description="仓库所有者用户名"),
+    repo_name: str = Path(..., description="仓库名称"),
+    task_classification_id: int = Query(..., description="要添加的任务分类ID"),
+    current_user: User = Depends(require_repository_owner),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """为仓库添加任务分类 - 需要仓库所有者权限"""
+    # 验证用户是否是仓库所有者
+    if getattr(current_user, "username") != owner:
+        raise AuthorizationError("只有仓库所有者可以修改仓库任务分类")
+
+    repo_service = RepositoryService(db)
+    repository = await repo_service.get_repository_by_full_name(f"{owner}/{repo_name}")
+
+    if not repository:
+        raise NotFoundError("仓库不存在")
+
+    # 添加任务分类关联
+    from app.services.task_classification_service import TaskClassificationService
+
+    task_service = TaskClassificationService(db)
+    success = await task_service.add_to_repository(
+        repository_id=getattr(repository, "id"),
+        task_classification_id=task_classification_id,
+    )
+
+    if not success:
+        raise HTTPException(status_code=400, detail="添加任务分类失败")
+
+    # 自动同步README
+    from app.services.classification_migration_service import (
+        ClassificationMigrationService,
+    )
+
+    migration_service = ClassificationMigrationService(db)
+    await migration_service.sync_repository_readme(getattr(repository, "id"))
+    await db.commit()
+
+    return {"message": "任务分类添加成功并已同步至README"}
+
+
+@router.delete("/{owner}/{repo_name}/task-classifications/{task_classification_id}")
+async def remove_repository_task_classification(
+    owner: str = Path(..., description="仓库所有者用户名"),
+    repo_name: str = Path(..., description="仓库名称"),
+    task_classification_id: int = Path(..., description="要移除的任务分类ID"),
+    current_user: User = Depends(require_repository_owner),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """移除仓库的任务分类 - 需要仓库所有者权限"""
+    # 验证用户是否是仓库所有者
+    if getattr(current_user, "username") != owner:
+        raise AuthorizationError("只有仓库所有者可以修改仓库任务分类")
+
+    repo_service = RepositoryService(db)
+    repository = await repo_service.get_repository_by_full_name(f"{owner}/{repo_name}")
+
+    if not repository:
+        raise NotFoundError("仓库不存在")
+
+    # 移除任务分类关联
+    from app.services.task_classification_service import TaskClassificationService
+
+    task_service = TaskClassificationService(db)
+    success = await task_service.remove_from_repository(
+        repository_id=getattr(repository, "id"),
+        task_classification_id=task_classification_id,
+    )
+
+    if not success:
+        raise HTTPException(status_code=400, detail="移除任务分类失败")
+
+    # 自动同步README
+    from app.services.classification_migration_service import (
+        ClassificationMigrationService,
+    )
+
+    migration_service = ClassificationMigrationService(db)
+    await migration_service.sync_repository_readme(getattr(repository, "id"))
+    await db.commit()
+
+    return {"message": "任务分类已移除并已同步至README"}
+
+
+@router.get("/{owner}/{repo_name}/task-classifications")
+async def get_repository_task_classifications(
+    owner: str = Path(..., description="仓库所有者用户名"),
+    repo_name: str = Path(..., description="仓库名称"),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """获取仓库的任务分类列表"""
+    repo_service = RepositoryService(db)
+    repository = await repo_service.get_repository_by_full_name(f"{owner}/{repo_name}")
+
+    if not repository:
+        raise NotFoundError("仓库不存在")
+
+    # 获取任务分类
+    from app.services.task_classification_service import TaskClassificationService
+
+    task_service = TaskClassificationService(db)
+    task_classifications = await task_service.get_repository_tasks(
+        getattr(repository, "id")
+    )
+
+    return {"task_classifications": task_classifications}
 
 
 @router.get("/{owner}/{repo_name}/settings", response_model=RepositorySettings)

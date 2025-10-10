@@ -2,8 +2,9 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any, Generic, TypeVar
 from datetime import datetime
 from app.schemas.user import UserPublic
+from app.schemas.task_classification import TaskClassification
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 class RepositoryBase(BaseModel):
@@ -20,6 +21,7 @@ class RepositoryCreate(RepositoryBase):
     readme_content: Optional[str] = None
     repo_metadata: Optional[Dict[str, Any]] = None
     classification_id: Optional[int] = None
+    task_classification_ids: Optional[List[int]] = None
 
 
 class RepositoryUpdate(BaseModel):
@@ -35,6 +37,7 @@ class RepositoryUpdate(BaseModel):
 
 class RepositorySettings(BaseModel):
     """仓库设置"""
+
     name: str
     description: Optional[str] = None
     visibility: str
@@ -43,10 +46,11 @@ class RepositorySettings(BaseModel):
     base_model: Optional[str] = None
     repo_type: str
     is_featured: bool = False
-    
+
 
 class RepositorySettingsUpdate(BaseModel):
     """仓库设置更新"""
+
     description: Optional[str] = None
     visibility: Optional[str] = Field(None, pattern="^(public|private)$")
     tags: Optional[List[str]] = None
@@ -62,6 +66,9 @@ class Repository(RepositoryBase):
     repo_metadata: Optional[Dict[str, Any]] = None
     readme_content: Optional[str] = None
     classification_path: Optional[List[str]] = []
+    task_classifications_data: Optional[List[TaskClassification]] = (
+        []
+    )  # 新增：任务分类列表
     stars_count: int = 0
     downloads_count: int = 0
     views_count: int = 0
@@ -92,6 +99,7 @@ class RepositoryListItem(BaseModel):
     license: Optional[str] = None
     base_model: Optional[str] = None
     classification_path: Optional[List[str]] = []
+    task_classifications: Optional[List[TaskClassification]] = []  # 新增：任务分类列表
     stars_count: int = 0
     downloads_count: int = 0
     views_count: int = 0
@@ -175,6 +183,7 @@ class RepositoryStats(BaseModel):
 
 class PaginatedResponse(BaseModel, Generic[T]):
     """分页响应模式"""
+
     items: List[T]
     total: int
     page: int
@@ -186,4 +195,5 @@ class PaginatedResponse(BaseModel, Generic[T]):
 
 class RepositoryListResponse(PaginatedResponse[RepositoryListItem]):
     """仓库列表分页响应"""
+
     pass

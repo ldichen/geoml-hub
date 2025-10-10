@@ -12,6 +12,8 @@
 	let error = null;
 	let classifications = [];
 	let loadingClassifications = false;
+	let taskClassifications = [];
+	let loadingTaskClassifications = false;
 
 	// Creation mode selection
 	let creationMode = 'config'; // 'config' or 'readme'
@@ -30,6 +32,7 @@
 		tags: [],
 		base_model: '',
 		classification_id: null,
+		task_classification_ids: [],
 		readme_content: ''
 	};
 
@@ -148,9 +151,33 @@
 		}
 	}
 
+	async function loadTaskClassifications() {
+		try {
+			loadingTaskClassifications = true;
+			const response = await fetch('/api/task-classifications/')
+				.then((res) => res.json())
+				.catch(() => ({ task_classifications: [] }));
+			taskClassifications = response.task_classifications || [];
+		} catch (err) {
+			console.error('Failed to load task classifications:', err);
+		} finally {
+			loadingTaskClassifications = false;
+		}
+	}
+
 	function handleClassificationSelect(event) {
 		const selectedClassification = event.detail;
 		formData.classification_id = selectedClassification.id;
+	}
+
+	function toggleTaskClassification(taskId) {
+		const index = formData.task_classification_ids.indexOf(taskId);
+		if (index > -1) {
+			formData.task_classification_ids.splice(index, 1);
+		} else {
+			formData.task_classification_ids.push(taskId);
+		}
+		formData.task_classification_ids = formData.task_classification_ids;
 	}
 
 	// Load classifications on component mount
@@ -158,6 +185,7 @@
 
 	onMount(() => {
 		loadClassifications();
+		loadTaskClassifications();
 	});
 
 	async function handleSubmit() {
@@ -205,6 +233,8 @@
 					tags: formData.tags,
 					base_model: formData.base_model || null,
 					classification_id: formData.classification_id || null,
+					task_classification_ids:
+						formData.task_classification_ids.length > 0 ? formData.task_classification_ids : null,
 					readme_content: formData.readme_content || null
 				};
 
@@ -447,9 +477,7 @@
 										/>
 									</svg>
 									<div class="mt-4">
-										<p class="text-blue-600 dark:text-blue-400 font-medium">
-											松开鼠标上传文件
-										</p>
+										<p class="text-blue-600 dark:text-blue-400 font-medium">松开鼠标上传文件</p>
 									</div>
 								{:else}
 									<!-- 默认状态图标 -->
@@ -657,6 +685,61 @@
 							loading={loadingClassifications}
 							on:select={handleClassificationSelect}
 						/>
+					</div>
+
+					<!-- Task Classifications (only show in config mode) -->
+					<div>
+						<div class="flex items-center space-x-2 mb-1">
+							<label class="text-sm font-semibold text-slate-700 dark:text-slate-300">
+								任务分类 (可选)
+							</label>
+							{#if formData.task_classification_ids.length > 0}
+								<button
+									type="button"
+									class="inline-flex items-center px-2 py-1 text-xs font-medium text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-300 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 rounded-lg transition-all duration-200"
+									on:click={() => {
+										formData.task_classification_ids = [];
+									}}
+								>
+									<svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M6 18L18 6M6 6l12 12"
+										/>
+									</svg>
+									清除选择
+								</button>
+							{/if}
+						</div>
+						{#if loadingTaskClassifications}
+							<div class="flex items-center justify-center py-8">
+								<Loading />
+							</div>
+						{:else}
+							<div class="flex flex-wrap gap-2">
+								{#each taskClassifications as task}
+									<button
+										type="button"
+										class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 border {formData.task_classification_ids.includes(
+											task.id
+										)
+											? 'bg-purple-50 text-purple-700 border-purple-300 hover:bg-purple-100 dark:bg-purple-900 dark:text-purple-300 dark:border-purple-700 dark:hover:bg-purple-800'
+											: 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-600 dark:hover:bg-slate-700'}"
+										on:click={() => toggleTaskClassification(task.id)}
+									>
+										<!-- {#if task.icon}
+											<span>{task.icon}</span>
+										{/if} -->
+										<span>{task.name}</span>
+									</button>
+								{/each}
+								{#if taskClassifications.length === 0}
+									<p class="text-sm text-slate-500 dark:text-slate-400">暂无任务分类</p>
+								{/if}
+							</div>
+						{/if}
 					</div>
 				{/if}
 

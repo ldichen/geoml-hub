@@ -12,7 +12,7 @@ type EnsureDefined<T> = T extends null | undefined ? {} : T;
 type OptionalUnion<U extends Record<string, any>, A extends keyof U = U extends U ? keyof U : never> = U extends unknown ? { [P in Exclude<A, keyof U>]?: never } & U : never;
 export type Snapshot<T = any> = Kit.Snapshot<T>;
 type PageParentData = EnsureDefined<LayoutData>;
-type LayoutRouteId = RouteId | "/" | "/[username]" | "/[username]/[repository]" | "/[username]/[repository]/blob/[...file_path]" | "/[username]/[repository]/commits/[...file_path]" | "/[username]/[repository]/drafts" | "/[username]/[repository]/edit/[...file_path]" | "/[username]/[repository]/upload" | "/admin" | "/admin/dashboard" | "/admin/repositories" | "/admin/settings" | "/admin/storage" | "/admin/system" | "/admin/users" | "/login" | "/new" | "/register" | "/search" | "/trending" | null
+type LayoutRouteId = RouteId | "/" | "/[username]" | "/[username]/[repository]" | "/[username]/[repository]/blob/[...file_path]" | "/[username]/[repository]/commits/[...file_path]" | "/[username]/[repository]/drafts" | "/[username]/[repository]/edit/[...file_path]" | "/[username]/[repository]/upload" | "/admin" | "/admin/classifications" | "/admin/dashboard" | "/admin/repositories" | "/admin/settings" | "/admin/storage" | "/admin/system" | "/admin/users" | "/login" | "/new" | "/register" | "/search" | "/trending" | null
 type LayoutParams = RouteParams & { username?: string; repository?: string; file_path?: string }
 type LayoutParentData = EnsureDefined<{}>;
 

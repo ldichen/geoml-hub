@@ -135,6 +135,37 @@ class RepositoryService:
             except Exception as e:
                 print(f"Failed to add classification: {e}")
 
+        # 处理任务分类关联
+        if hasattr(repo_data, "task_classification_ids") and repo_data.task_classification_ids:
+            from app.services.task_classification_service import TaskClassificationService
+            task_service = TaskClassificationService(self.db)
+            try:
+                for task_id in repo_data.task_classification_ids:
+                    await task_service.add_to_repository(
+                        repository_id=db_repo.id,
+                        task_classification_id=task_id
+                    )
+                # 重新加载repository以获取任务分类关联
+                await self.db.refresh(db_repo)
+            except Exception as e:
+                print(f"Failed to add task classifications: {e}")
+        elif metadata and "tasks" in metadata:
+            # 如果README中有tasks字段，从README同步到数据库
+            from app.services.task_classification_service import TaskClassificationService
+            task_service = TaskClassificationService(self.db)
+            try:
+                for task_name in metadata["tasks"]:
+                    # 根据名称查找task classification
+                    task_classification = await self.metadata_sync._find_task_classification_by_name(task_name)
+                    if task_classification:
+                        await task_service.add_to_repository(
+                            repository_id=db_repo.id,
+                            task_classification_id=task_classification.id
+                        )
+                await self.db.refresh(db_repo)
+            except Exception as e:
+                print(f"Failed to sync tasks from README: {e}")
+
         # 使用元数据同步服务生成包含所有信息的README
         final_readme = await self.metadata_sync.sync_repository_to_readme(db_repo)
 

@@ -23,7 +23,8 @@ export const nodes = [
 	() => import('./nodes/19'),
 	() => import('./nodes/20'),
 	() => import('./nodes/21'),
-	() => import('./nodes/22')
+	() => import('./nodes/22'),
+	() => import('./nodes/23')
 ];
 
 export const server_loads = [];
@@ -31,17 +32,18 @@ export const server_loads = [];
 export const dictionary = {
 		"/": [3],
 		"/admin": [11,[2]],
-		"/admin/dashboard": [12,[2]],
-		"/admin/repositories": [13,[2]],
-		"/admin/settings": [14,[2]],
-		"/admin/storage": [15,[2]],
-		"/admin/system": [16,[2]],
-		"/admin/users": [17,[2]],
-		"/login": [18],
-		"/new": [19],
-		"/register": [20],
-		"/search": [21],
-		"/trending": [22],
+		"/admin/classifications": [12,[2]],
+		"/admin/dashboard": [13,[2]],
+		"/admin/repositories": [14,[2]],
+		"/admin/settings": [15,[2]],
+		"/admin/storage": [16,[2]],
+		"/admin/system": [17,[2]],
+		"/admin/users": [18,[2]],
+		"/login": [19],
+		"/new": [20],
+		"/register": [21],
+		"/search": [22],
+		"/trending": [23],
 		"/[username]": [4],
 		"/[username]/[repository]": [5],
 		"/[username]/[repository]/blob/[...file_path]": [6],

@@ -17,6 +17,7 @@ from app.schemas.task_classification import (
     TaskClassificationList,
 )
 from app.services.task_classification_service import TaskClassificationService
+from app.services.classification_migration_service import ClassificationMigrationService
 
 router = APIRouter()
 
@@ -73,12 +74,39 @@ async def update_task_classification(
     admin_user: User = Depends(require_admin),
     db: AsyncSession = Depends(get_async_db)
 ):
-    """更新任务分类（管理员）"""
+    """更新任务分类（管理员）- 自动同步所有相关仓库的README"""
     service = TaskClassificationService(db)
+
+    # 检查是否修改了名称
+    old_classification = await service.get_by_id(classification_id)
+    if not old_classification:
+        raise HTTPException(status_code=404, detail="Task classification not found")
+
+    name_changed = (
+        data.name and
+        data.name != old_classification.name
+    )
+
+    # 更新任务分类
     classification = await service.update(classification_id, data)
 
     if not classification:
         raise HTTPException(status_code=404, detail="Task classification not found")
+
+    # 如果名称被修改，批量同步所有使用该任务分类的仓库README
+    if name_changed:
+        migration_service = ClassificationMigrationService(db)
+        sync_result = await migration_service.batch_sync_readmes_for_task_classification(
+            classification_id
+        )
+        # 记录同步结果到日志
+        from app.utils.logger import get_logger
+        logger = get_logger(__name__)
+        logger.info(
+            f"Task classification {classification_id} updated. "
+            f"Synced {sync_result['updated']} repositories, "
+            f"failed {sync_result['failed']} repositories."
+        )
 
     return classification
 

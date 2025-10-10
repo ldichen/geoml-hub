@@ -233,6 +233,36 @@ class FileUploadService:
             except Exception as storage_error:
                 logger.warning(f"Failed to update user storage: {storage_error}")
 
+            # 如果上传的是README.md，自动同步元数据
+            if session.file_path.lower() == "readme.md":
+                try:
+                    # 从MinIO获取README内容
+                    content = await minio_service.get_file_content(
+                        bucket_name=settings.minio_default_bucket,
+                        object_key=session.minio_object_key
+                    )
+                    readme_content = content.decode('utf-8')
+
+                    # 获取仓库
+                    repository_query = await self.db.execute(
+                        select(Repository).where(Repository.id == session.repository_id)
+                    )
+                    repository = repository_query.scalar_one_or_none()
+
+                    if repository:
+                        # 更新仓库的readme_content字段
+                        repository.readme_content = readme_content
+
+                        # 同步YAML frontmatter到数据库
+                        from app.services.metadata_sync_service import MetadataSyncService
+                        metadata_sync = MetadataSyncService(self.db)
+                        await metadata_sync.sync_readme_to_repository(repository, readme_content)
+
+                        await self.db.commit()
+                        logger.info(f"README.md metadata synced for repository {session.repository_id}")
+                except Exception as readme_error:
+                    logger.warning(f"Failed to sync README metadata: {readme_error}")
+
             logger.info(
                 f"Upload completed for session {session_id}, file: {session.file_name}"
             )

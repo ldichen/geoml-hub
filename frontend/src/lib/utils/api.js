@@ -1031,6 +1031,42 @@ class ApiClient {
 			body: { enabled, message }
 		});
 	}
+
+	// Repository classification management
+	repositories = {
+		// Add sphere classification to repository
+		addClassification: async (owner, repoName, classificationId) => {
+			return this.request(`/api/repositories/${owner}/${repoName}/classifications?classification_id=${classificationId}`, {
+				method: 'POST'
+			});
+		},
+
+		// Remove all sphere classifications from repository
+		removeClassifications: async (owner, repoName) => {
+			return this.request(`/api/repositories/${owner}/${repoName}/classifications`, {
+				method: 'DELETE'
+			});
+		},
+
+		// Add task classification to repository
+		addTaskClassification: async (owner, repoName, taskClassificationId) => {
+			return this.request(`/api/repositories/${owner}/${repoName}/task-classifications?task_classification_id=${taskClassificationId}`, {
+				method: 'POST'
+			});
+		},
+
+		// Remove task classification from repository
+		removeTaskClassification: async (owner, repoName, taskClassificationId) => {
+			return this.request(`/api/repositories/${owner}/${repoName}/task-classifications/${taskClassificationId}`, {
+				method: 'DELETE'
+			});
+		},
+
+		// Get repository task classifications
+		getTaskClassifications: async (owner, repoName) => {
+			return this.request(`/api/repositories/${owner}/${repoName}/task-classifications`);
+		}
+	};
 }
 
 // Create and export the API instance

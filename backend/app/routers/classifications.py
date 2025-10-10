@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from app.database import get_async_db
 from app.models.classification import Classification
+from app.models.user import User
 from app.schemas.classification import (
     ClassificationCreate,
     ClassificationUpdate,
@@ -11,6 +12,8 @@ from app.schemas.classification import (
     ClassificationTree,
 )
 from app.services.classification import ClassificationService
+from app.services.classification_migration_service import ClassificationMigrationService
+from app.dependencies.auth import require_admin
 
 router = APIRouter()
 
@@ -80,17 +83,48 @@ async def create_classification(
 async def update_classification(
     classification_id: int,
     classification: ClassificationUpdate,
-    db: AsyncSession = Depends(get_async_db)
+    db: AsyncSession = Depends(get_async_db),
+    current_user: User = Depends(require_admin)
 ):
-    """更新分类"""
+    """更新分类（需要管理员权限）- 自动同步所有相关仓库的README"""
     service = ClassificationService(db)
     try:
+        # 检查是否修改了名称
+        old_classification = await service.get_classification_by_id(classification_id)
+        if not old_classification:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="分类不存在"
+            )
+
+        name_changed = (
+            classification.name and
+            classification.name != old_classification.name
+        )
+
+        # 更新分类
         updated = await service.update_classification(classification_id, classification)
         if not updated:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="分类不存在"
             )
+
+        # 如果名称被修改，批量同步所有使用该分类的仓库README
+        if name_changed:
+            migration_service = ClassificationMigrationService(db)
+            sync_result = await migration_service.batch_sync_readmes_for_sphere_classification(
+                classification_id
+            )
+            # 记录同步结果到日志
+            from app.utils.logger import get_logger
+            logger = get_logger(__name__)
+            logger.info(
+                f"Classification {classification_id} updated. "
+                f"Synced {sync_result['updated']} repositories, "
+                f"failed {sync_result['failed']} repositories."
+            )
+
         return updated
     except ValueError as e:
         raise HTTPException(
