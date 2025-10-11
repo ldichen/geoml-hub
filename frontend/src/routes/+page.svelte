@@ -4,6 +4,7 @@
 	import { api } from '$lib/utils/api';
 	import type { Repository, User, Classification } from '$lib/types';
 	import RepositoryCard from '$lib/components/RepositoryCard.svelte';
+	import MiniRepositoryCard from '$lib/components/MiniRepositoryCard.svelte';
 	import SearchBar from '$lib/components/SearchBar.svelte';
 	import Loading from '$lib/components/Loading.svelte';
 	import ClassificationFilter from '$lib/components/ClassificationFilter.svelte';
@@ -124,9 +125,10 @@
 					...(selectedClassifications.size > 0 && {
 						classification_ids: Array.from(selectedClassifications)
 					}),
-					...(selectedTaskClassifications.size > 0 && {
-						task_classification_id: Array.from(selectedTaskClassifications)[0]
-					}),
+					...(selectedTaskClassifications.size > 0 &&
+						Array.from(selectedTaskClassifications)[0] !== undefined && {
+							task_classification_id: Array.from(selectedTaskClassifications)[0]
+						}),
 					...(selectedTags.size > 0 && { tags: Array.from(selectedTags).join(',') }),
 					...(selectedLicenses.size > 0 && { licenses: Array.from(selectedLicenses).join(',') }),
 					...(selectedRepoType && { repo_type: selectedRepoType }),
@@ -394,7 +396,7 @@
 
 	<div class="container bg-white">
 		<!-- Featured Repositories -->
-		{#if featuredRepositories.length > 0}
+		<!-- {#if featuredRepositories.length > 0}
 			<div class="mb-12 pt-8">
 				<div class="flex items-center justify-between mb-6">
 					<h2 class="text-2xl font-bold text-gray-900 dark:text-white flex items-center">
@@ -408,7 +410,7 @@
 					{/each}
 				</div>
 			</div>
-		{/if}
+		{/if} -->
 
 		<!-- Main Content -->
 		<div class="flex flex-col lg:flex-row gap-6">
@@ -473,7 +475,7 @@
 										<h4 class="text-sm font-medium text-gray-500 dark:text-gray-300">一级分类</h4>
 										{#if level1Classifications.some((c) => selectedClassifications.has(c.id))}
 											<button
-												class="inline-flex items-center px-2 py-1 text-sm font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
+												class="inline-flex items-center text-sm font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
 												on:click={() => {
 													level1Classifications.forEach((c) =>
 														selectedClassifications.delete(c.id)
@@ -531,7 +533,7 @@
 										<h4 class="text-sm font-medium text-gray-500 dark:text-gray-300">二级分类</h4>
 										{#if level2Classifications.some((c) => selectedClassifications.has(c.id))}
 											<button
-												class="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
+												class="inline-flex items-center text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
 												on:click={() => {
 													level2Classifications.forEach((c) =>
 														selectedClassifications.delete(c.id)
@@ -589,7 +591,7 @@
 										<h4 class="text-sm font-medium text-gray-500 dark:text-gray-300">三级分类</h4>
 										{#if level3Classifications.some((c) => selectedClassifications.has(c.id))}
 											<button
-												class="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
+												class="inline-flex items-center text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
 												on:click={() => {
 													level3Classifications.forEach((c) =>
 														selectedClassifications.delete(c.id)
@@ -647,7 +649,7 @@
 										<h4 class="text-sm font-medium text-gray-500 dark:text-gray-300">Tasks</h4>
 										{#if selectedTaskClassifications.size > 0}
 											<button
-												class="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
+												class="inline-flex items-center text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
 												on:click={resetTaskClassifications}
 											>
 												<svg
@@ -673,7 +675,7 @@
 												class="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-sm font-medium transition-colors border {selectedTaskClassifications.has(
 													task.id
 												)
-													? 'bg-purple-50 text-purple-700 border-purple-300 hover:bg-purple-100 dark:bg-purple-900 dark:text-purple-300 dark:border-purple-700 dark:hover:bg-purple-800'
+													? 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900 dark:text-blue-200 dark:border-blue-700'
 													: 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700'}"
 												on:click={() => toggleTaskClassification(task.id)}
 											>
@@ -691,7 +693,7 @@
 										<h4 class="text-sm font-medium text-gray-500 dark:text-gray-300">Libraries</h4>
 										{#if selectedTags.size > 0}
 											<button
-												class="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
+												class="inline-flex items-center text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
 												on:click={resetTags}
 											>
 												<svg
@@ -717,7 +719,7 @@
 												class="inline-flex items-center px-3 py-1 rounded-md text-sm font-medium transition-colors border {selectedTags.has(
 													tag
 												)
-													? 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900 dark:text-green-200 dark:border-green-700'
+													? 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900 dark:text-blue-200 dark:border-blue-700'
 													: 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700'}"
 												on:click={() => toggleTag(tag)}
 											>
@@ -726,7 +728,7 @@
 										{/each}
 										{#if commonTags.length > 10}
 											<button
-												class="inline-flex items-center px-3 py-1 text-sm font-medium text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 transition-colors"
+												class="inline-flex items-center px-3 py-1 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
 												on:click={() => (showAllTagsMain = !showAllTagsMain)}
 											>
 												{showAllTagsMain ? '收起' : `+ ${commonTags.length - 10}`}
@@ -743,7 +745,7 @@
 										<h4 class="text-sm font-medium text-gray-500 dark:text-gray-300">Licenses</h4>
 										{#if selectedLicenses.size > 0}
 											<button
-												class="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
+												class="inline-flex items-center text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
 												on:click={resetLicenses}
 											>
 												<svg
@@ -769,7 +771,7 @@
 												class="inline-flex items-center px-3 py-1 rounded-md text-sm font-medium transition-colors border {selectedLicenses.has(
 													license
 												)
-													? 'bg-purple-100 text-purple-800 border-purple-300 dark:bg-purple-900 dark:text-purple-200 dark:border-purple-700'
+													? 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900 dark:text-blue-200 dark:border-blue-700'
 													: 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700'}"
 												on:click={() => toggleLicense(license)}
 											>
@@ -778,7 +780,7 @@
 										{/each}
 										{#if commonLicenses.length > 10}
 											<button
-												class="inline-flex items-center px-3 py-1 text-sm font-medium text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors"
+												class="inline-flex items-center px-3 py-1 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
 												on:click={() => (showAllLicensesMain = !showAllLicensesMain)}
 											>
 												{showAllLicensesMain ? '收起' : `+ ${commonLicenses.length - 10}`}
@@ -798,7 +800,7 @@
 										<h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">一级分类</h4>
 										{#if level1Classifications.some((c) => selectedClassifications.has(c.id))}
 											<button
-												class="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
+												class="inline-flex items-center text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
 												on:click={() => {
 													level1Classifications.forEach((c) =>
 														selectedClassifications.delete(c.id)
@@ -856,7 +858,7 @@
 										<h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">二级分类</h4>
 										{#if level2Classifications.some((c) => selectedClassifications.has(c.id))}
 											<button
-												class="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
+												class="inline-flex items-center text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
 												on:click={() => {
 													level2Classifications.forEach((c) =>
 														selectedClassifications.delete(c.id)
@@ -914,7 +916,7 @@
 										<h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">三级分类</h4>
 										{#if level3Classifications.some((c) => selectedClassifications.has(c.id))}
 											<button
-												class="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
+												class="inline-flex items-center text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
 												on:click={() => {
 													level3Classifications.forEach((c) =>
 														selectedClassifications.delete(c.id)
@@ -969,10 +971,10 @@
 						<!-- Task Classifications -->
 						<div>
 							<div class="flex items-center justify-between mb-3">
-								<h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">tasks</h4>
+								<h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">Tasks</h4>
 								{#if selectedTaskClassifications.size > 0}
 									<button
-										class="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
+										class="inline-flex items-center text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
 										on:click={resetTaskClassifications}
 									>
 										<svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -993,7 +995,7 @@
 										class="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-sm font-medium transition-colors border {selectedTaskClassifications.has(
 											task.id
 										)
-											? 'bg-purple-50 text-purple-700 border-purple-300 hover:bg-purple-100 dark:bg-purple-900 dark:text-purple-300 dark:border-purple-700 dark:hover:bg-purple-800'
+											? 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900 dark:text-blue-200 dark:border-blue-700'
 											: 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700'}"
 										on:click={() => toggleTaskClassification(task.id)}
 									>
@@ -1012,10 +1014,10 @@
 						<!-- Tags -->
 						<div>
 							<div class="flex items-center justify-between mb-3">
-								<h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">常见标签</h4>
+								<h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">Libraries</h4>
 								{#if selectedTags.size > 0}
 									<button
-										class="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
+										class="inline-flex items-center text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
 										on:click={resetTags}
 									>
 										<svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1036,7 +1038,7 @@
 										class="inline-flex items-center px-3 py-1 rounded-md text-sm font-medium transition-colors border {selectedTags.has(
 											tag
 										)
-											? 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900 dark:text-green-200 dark:border-green-700'
+											? 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900 dark:text-blue-200 dark:border-blue-700'
 											: 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700'}"
 										on:click={() => toggleTag(tag)}
 									>
@@ -1045,7 +1047,7 @@
 								{/each}
 								{#if commonTags.length > 10}
 									<button
-										class="inline-flex items-center px-3 py-1 text-sm font-medium text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 transition-colors"
+										class="inline-flex items-center px-3 py-1 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
 										on:click={() => (showAllTags = !showAllTags)}
 									>
 										{showAllTags ? '收起' : `+ ${commonTags.length - 10}`}
@@ -1057,10 +1059,10 @@
 						<!-- Licenses -->
 						<div>
 							<div class="flex items-center justify-between mb-3">
-								<h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">常见许可证</h4>
+								<h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">Licenses</h4>
 								{#if selectedLicenses.size > 0}
 									<button
-										class="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
+										class="inline-flex items-center text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
 										on:click={resetLicenses}
 									>
 										<svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1081,7 +1083,7 @@
 										class="inline-flex items-center px-3 py-1 rounded-md text-sm font-medium transition-colors border {selectedLicenses.has(
 											license
 										)
-											? 'bg-purple-100 text-purple-800 border-purple-300 dark:bg-purple-900 dark:text-purple-200 dark:border-purple-700'
+											? 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900 dark:text-blue-200 dark:border-blue-700'
 											: 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700'}"
 										on:click={() => toggleLicense(license)}
 									>
@@ -1090,7 +1092,7 @@
 								{/each}
 								{#if commonLicenses.length > 10}
 									<button
-										class="inline-flex items-center px-3 py-1 text-sm font-medium text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors"
+										class="inline-flex items-center px-3 py-1 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
 										on:click={() => (showAllLicenses = !showAllLicenses)}
 									>
 										{showAllLicenses ? '收起' : `+ ${commonLicenses.length - 10}`}
@@ -1466,68 +1468,8 @@
 								<Loading size="sm" />
 							</div>
 						{:else if trendingRepositories.length > 0}
-							{#each trendingRepositories as repo, index (repo.id)}
-								<div class="group">
-									<a
-										href="/{repo.owner?.username}/{repo.name}"
-										class="block p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-									>
-										<div class="flex items-start space-x-3">
-											<!-- Repository Icon -->
-											<div
-												class="flex-shrink-0 w-8 h-8 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center"
-											>
-												<span class="text-xs font-medium text-blue-600 dark:text-blue-300">
-													{repo.name.charAt(0).toUpperCase()}
-												</span>
-											</div>
-
-											<!-- Repository Info -->
-											<div class="flex-1 min-w-0">
-												<div class="flex items-center space-x-1 mb-1">
-													<span class="text-xs font-medium text-gray-500 dark:text-gray-400">
-														#{index + 1}
-													</span>
-													<span class="text-sm font-medium text-gray-900 dark:text-white truncate">
-														{repo.owner?.username}/{repo.name}
-													</span>
-												</div>
-
-												{#if repo.description}
-													<p class="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 mb-2">
-														{repo.description}
-													</p>
-												{/if}
-
-												<!-- Stats -->
-												<div
-													class="flex items-center space-x-3 text-xs text-gray-500 dark:text-gray-400"
-												>
-													{#if trendingTab === 'featured' || trendingTab === 'recommended'}
-														<div class="flex items-center space-x-1">
-															<Star class="h-3 w-3" />
-															<span>{repo.stars_count || 0}</span>
-														</div>
-													{/if}
-													{#if trendingTab === 'trending'}
-														<div class="flex items-center space-x-1">
-															<Eye class="h-3 w-3" />
-															<span>{repo.views_count || 0}</span>
-														</div>
-													{/if}
-													{#if trendingTab === 'recommended'}
-														<div class="flex items-center space-x-1">
-															<Download class="h-3 w-3" />
-															<span>{repo.downloads_count || 0}</span>
-														</div>
-													{/if}
-													<span>•</span>
-													<span>about 16 hours ago</span>
-												</div>
-											</div>
-										</div>
-									</a>
-								</div>
+							{#each trendingRepositories as repo (repo.id)}
+								<MiniRepositoryCard {repo} />
 							{/each}
 						{:else}
 							<div class="text-center py-8">

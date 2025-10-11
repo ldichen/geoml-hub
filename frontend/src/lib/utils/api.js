@@ -459,7 +459,26 @@ class ApiClient {
 
 	// ================== Repositories API ==================
 	async listRepositories(options = {}) {
-		const params = new URLSearchParams(options);
+		const params = new URLSearchParams();
+
+		// Handle each parameter, especially arrays
+		for (const [key, value] of Object.entries(options)) {
+			if (value === undefined || value === null) {
+				continue;
+			}
+
+			// Handle array parameters (like classification_ids)
+			if (Array.isArray(value)) {
+				value.forEach(item => {
+					if (item !== undefined && item !== null) {
+						params.append(key, item);
+					}
+				});
+			} else {
+				params.append(key, value);
+			}
+		}
+
 		return this.request(`/api/repositories/?${params}`);
 	}
 

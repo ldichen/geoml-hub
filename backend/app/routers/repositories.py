@@ -77,7 +77,7 @@ async def list_repositories(
     licenses: Optional[str] = Query(None, description="许可证筛选，逗号分隔"),
     sort_by: str = Query(
         "updated",
-        regex="^(updated|updated_at|created|created_at|stars|stars_count|downloads|views)$",
+        regex="^(updated|updated_at|created|created_at|stars|stars_count|downloads|downloads_count|views|views_count)$",
     ),
     sort_order: Optional[str] = Query(
         None, regex="^(asc|desc)$", description="排序方向（兼容参数）"
@@ -180,6 +180,9 @@ async def list_repositories(
         "stars": Repository.stars_count,
         "downloads": Repository.downloads_count,
         "views": Repository.views_count,
+        "stars_count": Repository.stars_count,
+        "downloads_count": Repository.downloads_count,
+        "views_count": Repository.views_count,
     }[sort_by]
 
     if order == "desc":
