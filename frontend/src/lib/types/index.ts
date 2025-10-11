@@ -119,6 +119,19 @@ export interface Repository {
   is_starred?: boolean;
   is_owned?: boolean;
   classification_path?: string[]; // 分类路径
+  task_classifications_data?: TaskClassification[]; // 任务分类列表
+}
+
+export interface TaskClassification {
+  id: number;
+  name: string;
+  name_zh?: string;
+  description?: string;
+  icon?: string;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface RepositoryCreate {

@@ -99,7 +99,9 @@ class RepositoryListItem(BaseModel):
     license: Optional[str] = None
     base_model: Optional[str] = None
     classification_path: Optional[List[str]] = []
-    task_classifications: Optional[List[TaskClassification]] = []  # 新增：任务分类列表
+    task_classifications_data: Optional[List[TaskClassification]] = (
+        []
+    )  # 新增：任务分类列表
     stars_count: int = 0
     downloads_count: int = 0
     views_count: int = 0

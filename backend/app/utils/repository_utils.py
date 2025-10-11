@@ -5,8 +5,10 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List, Sequence
-from app.models import Repository, RepositoryClassification
+from app.models import Repository, RepositoryClassification, RepositoryTaskClassification
+from app.models.task_classification import TaskClassification
 from app.schemas.repository import RepositoryListItem
+from app.schemas.task_classification import TaskClassification as TaskClassificationSchema
 from app.services.classification import ClassificationService
 
 
@@ -37,9 +39,39 @@ async def enrich_repositories_with_classification_paths(
         if rc.repository_id not in repo_to_classifications:
             repo_to_classifications[rc.repository_id] = []
         repo_to_classifications[rc.repository_id].append(rc)
-    
+
     # 获取所有相关的分类ID
     all_classification_ids = list(set([rc.classification_id for rc in all_repo_classifications]))
+
+    # 一次性获取所有仓库的任务分类关联信息
+    task_classification_query = (
+        select(RepositoryTaskClassification, TaskClassification)
+        .join(TaskClassification)
+        .where(RepositoryTaskClassification.repository_id.in_(repo_ids))
+        .order_by(RepositoryTaskClassification.repository_id, TaskClassification.sort_order)
+    )
+
+    task_result = await db.execute(task_classification_query)
+    all_repo_task_classifications = task_result.all()
+
+    # 构建仓库ID到任务分类的映射
+    repo_to_task_classifications = {}
+    for rtc, task_class in all_repo_task_classifications:
+        if rtc.repository_id not in repo_to_task_classifications:
+            repo_to_task_classifications[rtc.repository_id] = []
+        repo_to_task_classifications[rtc.repository_id].append(
+            TaskClassificationSchema(
+                id=task_class.id,
+                name=task_class.name,
+                name_zh=task_class.name_zh,
+                description=task_class.description,
+                icon=task_class.icon,
+                sort_order=task_class.sort_order,
+                is_active=task_class.is_active,
+                created_at=task_class.created_at,
+                updated_at=task_class.updated_at,
+            )
+        )
     
     # 批量获取分类路径
     classification_paths = {}
@@ -82,7 +114,10 @@ async def enrich_repositories_with_classification_paths(
             classification_path = classification_paths.get(
                 deepest_classification.classification_id, []
             )
-        
+
+        # 获取该仓库的任务分类
+        task_classifications_data = repo_to_task_classifications.get(repo.id, [])
+
         # 创建RepositoryListItem
         repo_dict = {
             "id": repo.id,
@@ -96,6 +131,7 @@ async def enrich_repositories_with_classification_paths(
             "license": repo.license,
             "base_model": repo.base_model,
             "classification_path": classification_path,
+            "task_classifications_data": task_classifications_data,
             "stars_count": repo.stars_count,
             "downloads_count": repo.downloads_count,
             "views_count": repo.views_count,
@@ -106,7 +142,7 @@ async def enrich_repositories_with_classification_paths(
             "created_at": repo.created_at,
             "updated_at": repo.updated_at,
         }
-        
+
         enriched_repos.append(RepositoryListItem(**repo_dict))
-    
+
     return enriched_repos

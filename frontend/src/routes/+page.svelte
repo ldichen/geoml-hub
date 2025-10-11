@@ -33,6 +33,8 @@
 	let showAllLevel3 = false;
 	let showAllTags = false;
 	let showAllLicenses = false;
+	let showAllTagsMain = false;
+	let showAllLicensesMain = false;
 
 	// Pagination state
 	let currentPage = 1;
@@ -637,6 +639,154 @@
 									</div>
 								</div>
 							{/if}
+
+							<!-- Tasks -->
+							{#if taskClassifications.length > 0}
+								<div>
+									<div class="flex items-center justify-between mb-3">
+										<h4 class="text-sm font-medium text-gray-500 dark:text-gray-300">Tasks</h4>
+										{#if selectedTaskClassifications.size > 0}
+											<button
+												class="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
+												on:click={resetTaskClassifications}
+											>
+												<svg
+													class="w-3 h-3 mr-1"
+													fill="none"
+													stroke="currentColor"
+													viewBox="0 0 24 24"
+												>
+													<path
+														stroke-linecap="round"
+														stroke-linejoin="round"
+														stroke-width="2"
+														d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+													/>
+												</svg>
+												Reset
+											</button>
+										{/if}
+									</div>
+									<div class="flex flex-wrap gap-2">
+										{#each taskClassifications as task}
+											<button
+												class="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-sm font-medium transition-colors border {selectedTaskClassifications.has(
+													task.id
+												)
+													? 'bg-purple-50 text-purple-700 border-purple-300 hover:bg-purple-100 dark:bg-purple-900 dark:text-purple-300 dark:border-purple-700 dark:hover:bg-purple-800'
+													: 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700'}"
+												on:click={() => toggleTaskClassification(task.id)}
+											>
+												<span>{task.name}</span>
+											</button>
+										{/each}
+									</div>
+								</div>
+							{/if}
+
+							<!-- Libraries -->
+							{#if commonTags.length > 0}
+								<div>
+									<div class="flex items-center justify-between mb-3">
+										<h4 class="text-sm font-medium text-gray-500 dark:text-gray-300">Libraries</h4>
+										{#if selectedTags.size > 0}
+											<button
+												class="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
+												on:click={resetTags}
+											>
+												<svg
+													class="w-3 h-3 mr-1"
+													fill="none"
+													stroke="currentColor"
+													viewBox="0 0 24 24"
+												>
+													<path
+														stroke-linecap="round"
+														stroke-linejoin="round"
+														stroke-width="2"
+														d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+													/>
+												</svg>
+												Reset
+											</button>
+										{/if}
+									</div>
+									<div class="flex flex-wrap gap-2">
+										{#each showAllTagsMain ? commonTags : commonTags.slice(0, 10) as tag}
+											<button
+												class="inline-flex items-center px-3 py-1 rounded-md text-sm font-medium transition-colors border {selectedTags.has(
+													tag
+												)
+													? 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900 dark:text-green-200 dark:border-green-700'
+													: 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700'}"
+												on:click={() => toggleTag(tag)}
+											>
+												{tag}
+											</button>
+										{/each}
+										{#if commonTags.length > 10}
+											<button
+												class="inline-flex items-center px-3 py-1 text-sm font-medium text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 transition-colors"
+												on:click={() => (showAllTagsMain = !showAllTagsMain)}
+											>
+												{showAllTagsMain ? '收起' : `+ ${commonTags.length - 10}`}
+											</button>
+										{/if}
+									</div>
+								</div>
+							{/if}
+
+							<!-- Licenses -->
+							{#if commonLicenses.length > 0}
+								<div>
+									<div class="flex items-center justify-between mb-3">
+										<h4 class="text-sm font-medium text-gray-500 dark:text-gray-300">Licenses</h4>
+										{#if selectedLicenses.size > 0}
+											<button
+												class="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
+												on:click={resetLicenses}
+											>
+												<svg
+													class="w-3 h-3 mr-1"
+													fill="none"
+													stroke="currentColor"
+													viewBox="0 0 24 24"
+												>
+													<path
+														stroke-linecap="round"
+														stroke-linejoin="round"
+														stroke-width="2"
+														d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+													/>
+												</svg>
+												Reset
+											</button>
+										{/if}
+									</div>
+									<div class="flex flex-wrap gap-2">
+										{#each showAllLicensesMain ? commonLicenses : commonLicenses.slice(0, 10) as license}
+											<button
+												class="inline-flex items-center px-3 py-1 rounded-md text-sm font-medium transition-colors border {selectedLicenses.has(
+													license
+												)
+													? 'bg-purple-100 text-purple-800 border-purple-300 dark:bg-purple-900 dark:text-purple-200 dark:border-purple-700'
+													: 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700'}"
+												on:click={() => toggleLicense(license)}
+											>
+												{license}
+											</button>
+										{/each}
+										{#if commonLicenses.length > 10}
+											<button
+												class="inline-flex items-center px-3 py-1 text-sm font-medium text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors"
+												on:click={() => (showAllLicensesMain = !showAllLicensesMain)}
+											>
+												{showAllLicensesMain ? '收起' : `+ ${commonLicenses.length - 10}`}
+											</button>
+										{/if}
+									</div>
+								</div>
+							{/if}
 						</div>
 					{:else if activeTab === 'class'}
 						<!-- Classification Tags -->
@@ -819,7 +969,7 @@
 						<!-- Task Classifications -->
 						<div>
 							<div class="flex items-center justify-between mb-3">
-								<h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">任务分类</h4>
+								<h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">tasks</h4>
 								{#if selectedTaskClassifications.size > 0}
 									<button
 										class="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md transition-colors"
