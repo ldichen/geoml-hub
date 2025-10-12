@@ -38,6 +38,7 @@
 	import ImageDetailModal from '$lib/components/image/ImageDetailModal.svelte';
 	import ServiceFromImageModal from '$lib/components/image/ServiceFromImageModal.svelte';
 	import ClassificationSelector from '$lib/components/ClassificationSelector.svelte';
+	import TrendChart from '$lib/components/charts/TrendChart.svelte';
 
 	let repository = null;
 	let files = [];
@@ -116,6 +117,12 @@
 	let expandedFolders = new Set();
 	let fileTree = [];
 
+	// 趋势数据状态
+	let trendData = null;
+	let downloadsTrendData = [];
+	let viewsTrendData = [];
+	let loadingTrend = false;
+
 	// 构建文件树
 	function buildFileTree(files) {
 		const tree = {};
@@ -184,7 +191,34 @@
 
 	onMount(async () => {
 		await loadRepositoryData();
+		await loadTrendData();
 	});
+
+	async function loadTrendData() {
+		try {
+			loadingTrend = true;
+			const response = await api.getRepositoryTrend(username, repoName);
+			trendData = response;
+
+			// 转换数据格式供图表使用
+			if (response && response.data && Array.isArray(response.data)) {
+				downloadsTrendData = response.data.map((item) => ({
+					date: item.date,
+					value: item.downloads_count
+				}));
+
+				viewsTrendData = response.data.map((item) => ({
+					date: item.date,
+					value: item.views_count
+				}));
+			}
+		} catch (err) {
+			console.error('Failed to load trend data:', err);
+			// 趋势数据加载失败不影响主要功能
+		} finally {
+			loadingTrend = false;
+		}
+	}
 
 	async function loadRepositoryData() {
 		try {
@@ -1703,88 +1737,64 @@
 									>
 										<!-- Downloads -->
 										<div class="mb-6">
-											<div class="flex items-center justify-between mb-2">
+											<div class="flex items-center justify-between mb-3">
 												<span class="text-sm text-gray-600 dark:text-gray-400"
 													>Downloads last month</span
 												>
 											</div>
 											<div class="flex items-end space-x-4">
-												<div class="text-2xl font-bold text-gray-900 dark:text-white">3,383</div>
-												<div class="flex-1 h-12 flex items-end">
-													<!-- Smooth line chart representation -->
-													<svg class="w-full h-full" viewBox="0 0 200 48" fill="none">
-														<!-- Fill area under the curve -->
-														<path
-															d="M5 38 C15 42, 25 42, 35 30 C45 18, 55 25, 65 20 C75 15, 85 22, 95 12 C105 2, 115 8, 125 15 C135 22, 145 18, 155 25 C165 32, 175 20, 185 15 C190 12, 195 10, 200 8 L200 48 L5 48 Z"
-															fill="url(#downloadFillGradient)"
+												<div class="text-2xl font-bold text-gray-900 dark:text-white">
+													{repository?.downloads_count_30d || 0}
+												</div>
+												<div class="flex-1 h-16 flex items-end">
+													{#if loadingTrend}
+														<div class="w-full h-full flex items-center justify-center">
+															<span class="text-xs text-gray-400">Loading...</span>
+														</div>
+													{:else if downloadsTrendData.length >= 2}
+														<TrendChart
+															data={downloadsTrendData}
+															color="#3b82f6"
+															width={280}
+															height={80}
 														/>
-														<!-- Line stroke -->
-														<path
-															d="M5 38 C15 42, 25 42, 35 30 C45 18, 55 25, 65 20 C75 15, 85 22, 95 12 C105 2, 115 8, 125 15 C135 22, 145 18, 155 25 C165 32, 175 20, 185 15 C190 12, 195 10, 200 8"
-															stroke="#3b82f6"
-															stroke-width="3"
-															stroke-linecap="round"
-															stroke-linejoin="round"
-															fill="none"
-														/>
-														<defs>
-															<linearGradient
-																id="downloadFillGradient"
-																x1="0%"
-																y1="0%"
-																x2="0%"
-																y2="100%"
-															>
-																<stop offset="0%" style="stop-color:#3b82f6;stop-opacity:0.3" />
-																<stop offset="100%" style="stop-color:#3b82f6;stop-opacity:0.05" />
-															</linearGradient>
-														</defs>
-													</svg>
+													{:else}
+														<div class="w-full h-full flex items-center justify-center">
+															<span class="text-xs text-gray-400">Insufficient data</span>
+														</div>
+													{/if}
 												</div>
 											</div>
 										</div>
 
 										<!-- Views -->
 										<div>
-											<div class="flex items-center justify-between mb-2">
+											<div class="flex items-center justify-between mb-3">
 												<span class="text-sm text-gray-600 dark:text-gray-400"
 													>Views last month</span
 												>
 											</div>
 											<div class="flex items-end space-x-4">
 												<div class="text-2xl font-bold text-gray-900 dark:text-white">
-													{repository.views_count || 0}
+													{repository?.views_count_30d || 0}
 												</div>
-												<div class="flex-1 h-12 flex items-end">
-													<!-- Smooth line chart representation -->
-													<svg class="w-full h-full" viewBox="0 0 200 48" fill="none">
-														<!-- Fill area under the curve -->
-														<path
-															d="M5 32 C15 35, 25 35, 35 22 C45 9, 55 16, 65 25 C75 34, 85 28, 95 22 C105 16, 115 25, 125 30 C135 35, 145 32, 155 25 C165 18, 175 22, 185 10 C190 6, 195 8, 200 12 L200 48 L5 48 Z"
-															fill="url(#viewsFillGradient)"
+												<div class="flex-1 h-16 flex items-end">
+													{#if loadingTrend}
+														<div class="w-full h-full flex items-center justify-center">
+															<span class="text-xs text-gray-400">Loading...</span>
+														</div>
+													{:else if viewsTrendData.length >= 2}
+														<TrendChart
+															data={viewsTrendData}
+															color="#3b82f6"
+															width={280}
+															height={80}
 														/>
-														<!-- Line stroke -->
-														<path
-															d="M5 32 C15 35, 25 35, 35 22 C45 9, 55 16, 65 25 C75 34, 85 28, 95 22 C105 16, 115 25, 125 30 C135 35, 145 32, 155 25 C165 18, 175 22, 185 10 C190 6, 195 8, 200 12"
-															stroke="#3b82f6"
-															stroke-width="3"
-															stroke-linecap="round"
-															stroke-linejoin="round"
-															fill="none"
-														/>
-														<defs>
-															<linearGradient
-																id="viewsFillGradient"
-																x1="0%"
-																y1="0%"
-																x2="0%"
-																y2="100%"
-															>
-																<stop offset="0%" style="stop-color:#3b82f6;stop-opacity:0.3" />
-																<stop offset="100%" style="stop-color:#3b82f6;stop-opacity:0.05" />
-															</linearGradient>
-														</defs>
-													</svg>
+													{:else}
+														<div class="w-full h-full flex items-center justify-center">
+															<span class="text-xs text-gray-400">Insufficient data</span>
+														</div>
+													{/if}
 												</div>
 											</div>
 										</div>

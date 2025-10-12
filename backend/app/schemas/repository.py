@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any, Generic, TypeVar
-from datetime import datetime
+from datetime import datetime, date
 from app.schemas.user import UserPublic
 from app.schemas.task_classification import TaskClassification
 
@@ -77,6 +77,13 @@ class Repository(RepositoryBase):
     total_size: int = 0
     is_active: bool = True
     is_featured: bool = False
+    # 时间窗口统计字段
+    views_count_7d: Optional[int] = None
+    downloads_count_7d: Optional[int] = None
+    views_count_30d: Optional[int] = None
+    downloads_count_30d: Optional[int] = None
+    trending_score: Optional[float] = None
+    trending_updated_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
     last_commit_at: Optional[datetime] = None
@@ -109,6 +116,12 @@ class RepositoryListItem(BaseModel):
     total_size: int = 0
     is_active: bool = True
     is_featured: bool = False
+    # 时间窗口统计字段
+    views_count_7d: Optional[int] = None
+    downloads_count_7d: Optional[int] = None
+    views_count_30d: Optional[int] = None
+    downloads_count_30d: Optional[int] = None
+    trending_score: Optional[float] = None
     created_at: datetime
     updated_at: datetime
 
@@ -199,3 +212,32 @@ class RepositoryListResponse(PaginatedResponse[RepositoryListItem]):
     """仓库列表分页响应"""
 
     pass
+
+
+# 每日统计相关 Schema
+class RepositoryDailyStatsBase(BaseModel):
+    """每日统计基础模型"""
+    date: date
+    views_count: int = 0
+    downloads_count: int = 0
+    unique_visitors: int = 0
+    unique_downloaders: int = 0
+
+
+class RepositoryDailyStats(RepositoryDailyStatsBase):
+    """每日统计完整模型"""
+    id: int
+    repository_id: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class RepositoryTrendResponse(BaseModel):
+    """仓库趋势数据响应"""
+    start_date: date
+    end_date: date
+    interval: str  # daily, weekly, monthly
+    data: List[RepositoryDailyStatsBase]

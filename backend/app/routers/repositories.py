@@ -7,13 +7,14 @@ from fastapi import (
     UploadFile,
     File,
     Form,
+    Request,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_, desc
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from app.database import get_async_db
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
 import logging
 from app.models import (
     Repository,
@@ -21,6 +22,7 @@ from app.models import (
     RepositoryStar,
     User,
     RepositoryClassification,
+    RepositoryDailyStats,
 )
 from app.utils.repository_utils import enrich_repositories_with_classification_paths
 from app.schemas.repository import (
@@ -34,6 +36,8 @@ from app.schemas.repository import (
     RepositorySettings,
     RepositorySettingsUpdate,
     RepositoryListResponse,
+    RepositoryTrendResponse,
+    RepositoryDailyStatsBase,
 )
 from app.services.repository_service import RepositoryService
 from app.services.file_upload_service import FileUploadService
@@ -227,6 +231,7 @@ async def list_repositories(
 
 @router.get("/{owner}/{repo_name}", response_model=RepositorySchema)
 async def get_repository(
+    request: Request,
     owner: str = Path(..., description="仓库所有者用户名"),
     repo_name: str = Path(..., description="仓库名称"),
     current_user: Optional[User] = Depends(get_current_user),
@@ -244,23 +249,104 @@ async def get_repository(
         if not current_user or getattr(current_user, "username") != owner:
             raise AuthorizationError("无权访问私有仓库")
 
-    # 记录访问 - 暂时禁用view记录功能
-    # TODO: 修复RepositoryView表相关问题
-    # try:
-    #     user_id = getattr(current_user, "id") if current_user else None
-    #     await repo_service.record_view(
-    #         getattr(repository, "id"), user_id=user_id, ip_address="127.0.0.1"
-    #     )
-    # except Exception as e:
-    #     # 记录访问失败不应该影响仓库获取
-    #     print(f"Failed to record view: {e}")
-    #     pass
+    # 记录访问
+    try:
+        user_id = getattr(current_user, "id") if current_user else None
+        # 获取客户端IP
+        client_host = request.client.host if request.client else None
+        # 获取User-Agent
+        user_agent = request.headers.get("user-agent")
+        # 获取Referer
+        referer = request.headers.get("referer")
+
+        await repo_service.record_view(
+            getattr(repository, "id"),
+            user_id=user_id,
+            ip_address=client_host,
+            user_agent=user_agent,
+            referer=referer,
+            view_type="page_view"
+        )
+
+        # 提交访问记录
+        await db.commit()
+
+        # 刷新 repository 对象，使其重新附加到 session
+        await db.refresh(repository)
+
+    except Exception as e:
+        # 记录访问失败不应该影响仓库获取
+        logger.error(f"记录仓库访问失败: {e}")
+        await db.rollback()
+        pass
+
+    # 延迟更新：检查统计数据是否需要更新（超过1小时未更新则重新计算）
+    try:
+        should_update = (
+            repository.trending_updated_at is None or
+            (datetime.now(timezone.utc) - repository.trending_updated_at) > timedelta(hours=1)
+        )
+
+        if should_update:
+            # 实时计算并更新时间窗口统计
+            today = date.today()
+            date_7d_ago = today - timedelta(days=7)
+            date_30d_ago = today - timedelta(days=30)
+
+            # 计算最近7天统计
+            stats_7d_query = select(
+                func.sum(RepositoryDailyStats.views_count).label('views'),
+                func.sum(RepositoryDailyStats.downloads_count).label('downloads')
+            ).where(
+                RepositoryDailyStats.repository_id == repository.id,
+                RepositoryDailyStats.date >= date_7d_ago,
+                RepositoryDailyStats.date <= today
+            )
+            stats_7d_result = await db.execute(stats_7d_query)
+            stats_7d = stats_7d_result.one()
+
+            # 计算最近30天统计
+            stats_30d_query = select(
+                func.sum(RepositoryDailyStats.views_count).label('views'),
+                func.sum(RepositoryDailyStats.downloads_count).label('downloads')
+            ).where(
+                RepositoryDailyStats.repository_id == repository.id,
+                RepositoryDailyStats.date >= date_30d_ago,
+                RepositoryDailyStats.date <= today
+            )
+            stats_30d_result = await db.execute(stats_30d_query)
+            stats_30d = stats_30d_result.one()
+
+            # 更新 repository 字段
+            repository.views_count_7d = stats_7d.views or 0
+            repository.downloads_count_7d = stats_7d.downloads or 0
+            repository.views_count_30d = stats_30d.views or 0
+            repository.downloads_count_30d = stats_30d.downloads or 0
+
+            # 计算综合热度分数
+            repository.trending_score = (
+                repository.views_count_7d * 1.0 +
+                repository.downloads_count_7d * 3.0 +
+                repository.stars_count * 2.0
+            )
+            repository.trending_updated_at = datetime.now(timezone.utc)
+
+            await db.commit()
+            await db.refresh(repository)
+
+            logger.info(f"更新了仓库 {repository.full_name} 的时间窗口统计")
+
+    except Exception as e:
+        logger.error(f"更新时间窗口统计失败: {e}")
+        # 统计更新失败不影响返回仓库数据
+        await db.rollback()
+        # 回滚后需要刷新对象，重新附加到 session
+        await db.refresh(repository)
+        pass
 
     # 添加分类路径信息 - 手动添加而不使用列表专用的enrich函数
     try:
         from app.services.classification import ClassificationService
-        from app.models import RepositoryClassification
-        from sqlalchemy import select
 
         classification_service = ClassificationService(db)
 
@@ -2016,3 +2102,60 @@ async def rename_file(
     except Exception as e:
         logger.error(f"文件重命名失败: {e}")
         raise HTTPException(status_code=500, detail=f"文件重命名失败: {str(e)}")
+
+
+@router.get("/{username}/{repo_name}/stats/trend", response_model=RepositoryTrendResponse)
+async def get_repository_trend(
+    username: str = Path(..., description="用户名"),
+    repo_name: str = Path(..., description="仓库名称"),
+    start_date: Optional[date] = Query(None, description="开始日期 (YYYY-MM-DD)"),
+    end_date: Optional[date] = Query(None, description="结束日期 (YYYY-MM-DD)"),
+    interval: str = Query("daily", regex="^(daily|weekly|monthly)$", description="时间粒度"),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """获取仓库统计趋势数据"""
+
+    # 默认查询最近30天
+    if not end_date:
+        end_date = date.today()
+    if not start_date:
+        start_date = end_date - timedelta(days=30)
+
+    # 获取仓库
+    repo_service = RepositoryService(db)
+    repository = await repo_service.get_repository_by_full_name(f"{username}/{repo_name}")
+
+    if not repository:
+        raise HTTPException(status_code=404, detail="仓库不存在")
+
+    # 查询每日统计数据
+    query = select(RepositoryDailyStats).where(
+        RepositoryDailyStats.repository_id == repository.id,
+        RepositoryDailyStats.date >= start_date,
+        RepositoryDailyStats.date <= end_date
+    ).order_by(RepositoryDailyStats.date)
+
+    result = await db.execute(query)
+    daily_stats = result.scalars().all()
+
+    # 转换为响应格式
+    data = [
+        RepositoryDailyStatsBase(
+            date=stat.date,
+            views_count=stat.views_count,
+            downloads_count=stat.downloads_count,
+            unique_visitors=stat.unique_visitors,
+            unique_downloaders=stat.unique_downloaders
+        )
+        for stat in daily_stats
+    ]
+
+    # TODO: 如果 interval 是 weekly 或 monthly，需要聚合数据
+    # 目前先返回 daily 数据
+
+    return RepositoryTrendResponse(
+        start_date=start_date,
+        end_date=end_date,
+        interval=interval,
+        data=data
+    )

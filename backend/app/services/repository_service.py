@@ -1,6 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_, desc, update
 from sqlalchemy.orm import selectinload
+from sqlalchemy.dialects.postgresql import insert
 from typing import Optional, Dict, Any, List, Sequence
 from fastapi import HTTPException, UploadFile
 from app.middleware.error_response import (
@@ -15,6 +16,7 @@ from app.models import (
     RepositoryStar,
     RepositoryView,
     RepositoryClassification,
+    RepositoryDailyStats,
     User,
     FileDownload,
 )
@@ -25,7 +27,7 @@ from app.services.metadata_sync_service import MetadataSyncService
 from app.utils.logger import get_logger
 
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 import os
 
 logger = get_logger(__name__)
@@ -798,7 +800,7 @@ class RepositoryService:
 
         self.db.add(view)
 
-        # 更新仓库的访问计数（可以考虑使用异步任务来避免影响响应性能）
+        # 更新仓库的访问计数
         repo_query = select(Repository).where(Repository.id == repository_id)
         repo_result = await self.db.execute(repo_query)
         repository = repo_result.scalar_one_or_none()
@@ -806,7 +808,24 @@ class RepositoryService:
         if repository:
             setattr(repository, "views_count", getattr(repository, "views_count") + 1)
 
-        await self.db.commit()
+        # 更新当日聚合统计（使用 UPSERT）
+        today = date.today()
+        stmt = insert(RepositoryDailyStats).values(
+            repository_id=repository_id,
+            date=today,
+            views_count=1,
+            unique_visitors=0  # 稍后通过定时任务计算
+        ).on_conflict_do_update(
+            index_elements=['repository_id', 'date'],
+            set_=dict(
+                views_count=RepositoryDailyStats.views_count + 1,
+                updated_at=func.now()
+            )
+        )
+        await self.db.execute(stmt)
+
+        # 注意：不在这里 commit，由调用者决定何时提交事务
+        # await self.db.commit()
 
     def _is_special_file(self, file_path: str) -> bool:
         """判断是否为特殊文件（需要特殊处理的文件）"""
@@ -1203,6 +1222,23 @@ class RepositoryService:
             getattr(file_obj.repository, "downloads_count") + 1,
         )
 
+        # 更新当日聚合统计（使用 UPSERT）
+        today = date.today()
+        stmt = insert(RepositoryDailyStats).values(
+            repository_id=file_obj.repository.id,
+            date=today,
+            downloads_count=1,
+            unique_downloaders=0  # 稍后通过定时任务计算
+        ).on_conflict_do_update(
+            index_elements=['repository_id', 'date'],
+            set_=dict(
+                downloads_count=RepositoryDailyStats.downloads_count + 1,
+                updated_at=func.now()
+            )
+        )
+        await self.db.execute(stmt)
+
+        # 注意：不在这里 commit，由调用者决定何时提交事务
         await self.db.commit()
 
         # 生成预签名下载URL

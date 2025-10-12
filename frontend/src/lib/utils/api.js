@@ -534,6 +534,24 @@ class ApiClient {
 		});
 	}
 
+	async getRepositoryTrend(owner, name, params = {}) {
+		const searchParams = new URLSearchParams();
+
+		// 默认查询最近30天
+		const endDate = params.end_date || new Date().toISOString().split('T')[0];
+		const startDate = params.start_date || (() => {
+			const date = new Date();
+			date.setDate(date.getDate() - 30);
+			return date.toISOString().split('T')[0];
+		})();
+
+		searchParams.append('start_date', startDate);
+		searchParams.append('end_date', endDate);
+		searchParams.append('interval', params.interval || 'daily');
+
+		return this.request(`/api/repositories/${owner}/${name}/stats/trend?${searchParams}`);
+	}
+
 	async getRepositoryStars(owner, name, options = {}) {
 		const params = new URLSearchParams(options);
 		return this.request(`/api/repositories/${owner}/${name}/stars?${params}`);

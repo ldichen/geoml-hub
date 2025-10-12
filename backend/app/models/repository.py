@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, Boolean, ARRAY, JSON, BIGINT, UniqueConstraint, Index
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, Boolean, ARRAY, JSON, BIGINT, UniqueConstraint, Index, Date, Float
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -29,11 +29,19 @@ class Repository(Base):
     license = Column(String(100))
     base_model = Column(String(255))  # 基础模型名称
     
-    # 统计信息
+    # 统计信息 - 总计
     stars_count = Column(Integer, default=0, index=True)
-    downloads_count = Column(Integer, default=0, index=True)
-    views_count = Column(Integer, default=0, index=True)
+    downloads_count = Column(Integer, default=0, index=True)  # 保持向后兼容，将来改为 downloads_count_total
+    views_count = Column(Integer, default=0, index=True)      # 保持向后兼容，将来改为 views_count_total
     forks_count = Column(Integer, default=0)
+
+    # 时间窗口统计
+    views_count_7d = Column(Integer, default=0, index=True)
+    downloads_count_7d = Column(Integer, default=0, index=True)
+    views_count_30d = Column(Integer, default=0, index=True)
+    downloads_count_30d = Column(Integer, default=0, index=True)
+    trending_score = Column(Integer, default=0, index=True)
+    trending_updated_at = Column(DateTime(timezone=True))
     
     # 文件和存储信息
     total_files = Column(Integer, default=0)
@@ -194,3 +202,31 @@ class RepositoryTaskClassification(Base):
     # 关系
     repository = relationship("Repository", back_populates="task_classifications")
     task_classification = relationship("TaskClassification", back_populates="repository_associations")
+
+
+class RepositoryDailyStats(Base):
+    """仓库每日统计表 - 按日聚合的统计数据"""
+    __tablename__ = "repository_daily_stats"
+
+    id = Column(Integer, primary_key=True, index=True)
+    repository_id = Column(Integer, ForeignKey("repositories.id", ondelete="CASCADE"), nullable=False, index=True)
+    date = Column(Date, nullable=False, index=True)
+
+    # 每日统计
+    views_count = Column(Integer, default=0, nullable=False)
+    downloads_count = Column(Integer, default=0, nullable=False)
+    unique_visitors = Column(Integer, default=0, nullable=False)  # 独立访客数（去重IP或用户）
+    unique_downloaders = Column(Integer, default=0, nullable=False)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint('repository_id', 'date', name='unique_repo_date'),
+        Index('idx_repo_daily_stats_date', 'date'),
+        Index('idx_repo_daily_stats_repo_id', 'repository_id'),
+        Index('idx_repo_daily_stats_repo_date', 'repository_id', 'date'),
+    )
+
+    # 关系
+    repository = relationship("Repository", backref="daily_stats")

@@ -1,7 +1,7 @@
 from .classification import Classification
 from .task_classification import TaskClassification
 from .user import User, UserFollow, UserStorage
-from .repository import Repository, RepositoryFile, RepositoryStar, RepositoryView, RepositoryClassification, RepositoryTaskClassification
+from .repository import Repository, RepositoryFile, RepositoryStar, RepositoryView, RepositoryClassification, RepositoryTaskClassification, RepositoryDailyStats
 from .file_storage import FileUploadSession, FileDownload, SystemStorage, MinIOServiceHealth, UploadStatus
 from .personal_files import PersonalFile, PersonalFileDownload, PersonalFolder
 from .image import Image, ImageBuildLog
@@ -11,7 +11,7 @@ __all__ = [
     "Classification",
     "TaskClassification",
     "User", "UserFollow", "UserStorage",
-    "Repository", "RepositoryFile", "RepositoryStar", "RepositoryView", "RepositoryClassification", "RepositoryTaskClassification",
+    "Repository", "RepositoryFile", "RepositoryStar", "RepositoryView", "RepositoryClassification", "RepositoryTaskClassification", "RepositoryDailyStats",
     "FileUploadSession", "FileDownload", "SystemStorage", "MinIOServiceHealth", "UploadStatus",
     "PersonalFile", "PersonalFileDownload", "PersonalFolder",
     "Image", "ImageBuildLog",
