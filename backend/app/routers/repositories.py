@@ -10,12 +10,14 @@ from fastapi import (
     Request,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_, desc
+from sqlalchemy import select, func, and_, or_, desc, update, delete
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from app.database import get_async_db
 from datetime import datetime, timezone, timedelta, date
 import logging
+import random
 from app.models import (
     Repository,
     RepositoryFile,
@@ -46,6 +48,7 @@ from app.dependencies.auth import (
     get_current_active_user,
     require_repository_owner,
     require_repository_access,
+    require_admin,
 )
 from app.middleware.error_response import NotFoundError, AuthorizationError
 from app.config import settings
@@ -2159,3 +2162,224 @@ async def get_repository_trend(
         interval=interval,
         data=data
     )
+
+
+@router.post("/admin/stats/generate-sample-data")
+async def generate_sample_trend_data(
+    days: int = Query(30, ge=1, le=90, description="生成多少天的数据"),
+    views_min: int = Query(0, ge=0, description="每日浏览量最小值"),
+    views_max: int = Query(20, ge=0, description="每日浏览量最大值"),
+    downloads_min: int = Query(0, ge=0, description="每日下载量最小值"),
+    downloads_max: int = Query(8, ge=0, description="每日下载量最大值"),
+    add_trends: bool = Query(True, description="是否添加趋势效果（线性增长）"),
+    weekend_effect: bool = Query(True, description="是否模拟周末效应（周末减少30%）"),
+    spike_probability: float = Query(0.05, ge=0, le=1, description="爆发日概率（浏览量翻倍）"),
+    repository_ids: Optional[List[int]] = Query(None, description="指定仓库ID列表，为空则处理所有活跃仓库"),
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """
+    生成模拟的趋势数据（仅用于测试和演示，需要管理员权限）
+
+    策略说明：
+    - 策略2：模拟趋势（线性增长，从少到多）
+    - 策略3：模拟周末效应（周末浏览量减少30%）
+    - 策略4：添加随机"爆发日"（5%概率浏览量翻倍）
+
+    特点：
+    - 批量插入优化性能
+    - 增量模式（ON CONFLICT DO NOTHING）不覆盖已存在的数据
+    - 自动同步更新 Repository 表的时间窗口字段
+    """
+
+    try:
+        # 1. 获取目标仓库列表
+        if repository_ids:
+            query = select(Repository).where(Repository.id.in_(repository_ids))
+        else:
+            query = select(Repository).where(Repository.is_active == True)
+
+        result = await db.execute(query)
+        repositories = result.scalars().all()
+
+        if not repositories:
+            raise HTTPException(404, "未找到符合条件的仓库")
+
+        logger.info(f"开始为 {len(repositories)} 个仓库生成 {days} 天的模拟趋势数据")
+
+        # 2. 计算日期范围
+        end_date = date.today()
+        start_date = end_date - timedelta(days=days)
+
+        # 3. 批量生成数据
+        batch_data = []
+        total_records = len(repositories) * days
+        processed = 0
+        affected_repo_ids = set()
+
+        for repo in repositories:
+            current_date = start_date
+            day_index = 0
+
+            while current_date <= end_date:
+                # 策略2：添加趋势因子（从0.5开始线性增长到1.5）
+                trend_factor = 1.0
+                if add_trends:
+                    progress = day_index / days  # 0.0 → 1.0
+                    trend_factor = 0.5 + progress * 1.0  # 0.5 → 1.5
+
+                # 生成基础浏览量
+                base_views = random.randint(views_min, views_max)
+                views = int(base_views * trend_factor)
+
+                # 策略3：周末效应
+                if weekend_effect and current_date.weekday() in [5, 6]:
+                    views = int(views * 0.7)  # 周末减少30%
+
+                # 策略4：随机爆发日
+                if random.random() < spike_probability:
+                    views = views * 2  # 浏览量翻倍
+
+                # 生成下载量（也应用趋势因子）
+                base_downloads = random.randint(downloads_min, downloads_max)
+                downloads = int(base_downloads * trend_factor)
+
+                # 策略3：周末效应也影响下载量
+                if weekend_effect and current_date.weekday() in [5, 6]:
+                    downloads = int(downloads * 0.7)
+
+                # 生成独立访客数（约为浏览量的60-80%）
+                unique_visitors = int(views * random.uniform(0.6, 0.8))
+                unique_downloaders = min(downloads, int(downloads * random.uniform(0.8, 1.0)))
+
+                batch_data.append({
+                    'repository_id': repo.id,
+                    'date': current_date,
+                    'views_count': max(0, views),  # 确保非负
+                    'downloads_count': max(0, downloads),
+                    'unique_visitors': max(0, unique_visitors),
+                    'unique_downloaders': max(0, unique_downloaders)
+                })
+
+                affected_repo_ids.add(repo.id)
+                current_date += timedelta(days=1)
+                day_index += 1
+                processed += 1
+
+                # 每100条批量插入一次
+                if len(batch_data) >= 100:
+                    stmt = insert(RepositoryDailyStats).values(batch_data)
+                    # 增量模式：不覆盖已存在的数据
+                    stmt = stmt.on_conflict_do_nothing(index_elements=['repository_id', 'date'])
+                    await db.execute(stmt)
+                    await db.commit()
+                    batch_data = []
+
+                    if processed % 500 == 0:
+                        logger.info(f"进度: {processed}/{total_records} ({processed/total_records*100:.1f}%)")
+
+        # 插入剩余数据
+        if batch_data:
+            stmt = insert(RepositoryDailyStats).values(batch_data)
+            stmt = stmt.on_conflict_do_nothing(index_elements=['repository_id', 'date'])
+            await db.execute(stmt)
+            await db.commit()
+
+        logger.info(f"✓ 数据生成完成，共处理 {processed} 条记录")
+
+        # 4. 同步更新所有受影响仓库的时间窗口统计
+        logger.info(f"开始更新 {len(affected_repo_ids)} 个仓库的时间窗口统计...")
+
+        for repo_id in affected_repo_ids:
+            # 计算最近7天和30天的统计
+            today = date.today()
+            date_7d_ago = today - timedelta(days=7)
+            date_30d_ago = today - timedelta(days=30)
+
+            # 7天统计
+            stats_7d_query = select(
+                func.sum(RepositoryDailyStats.views_count).label('views'),
+                func.sum(RepositoryDailyStats.downloads_count).label('downloads')
+            ).where(
+                RepositoryDailyStats.repository_id == repo_id,
+                RepositoryDailyStats.date >= date_7d_ago,
+                RepositoryDailyStats.date <= today
+            )
+            stats_7d_result = await db.execute(stats_7d_query)
+            stats_7d = stats_7d_result.one()
+
+            # 30天统计
+            stats_30d_query = select(
+                func.sum(RepositoryDailyStats.views_count).label('views'),
+                func.sum(RepositoryDailyStats.downloads_count).label('downloads')
+            ).where(
+                RepositoryDailyStats.repository_id == repo_id,
+                RepositoryDailyStats.date >= date_30d_ago,
+                RepositoryDailyStats.date <= today
+            )
+            stats_30d_result = await db.execute(stats_30d_query)
+            stats_30d = stats_30d_result.one()
+
+            # 获取仓库的 stars_count
+            repo_query = select(Repository.stars_count).where(Repository.id == repo_id)
+            repo_result = await db.execute(repo_query)
+            stars_count = repo_result.scalar() or 0
+
+            # 计算综合热度分数
+            views_7d = stats_7d.views or 0
+            downloads_7d = stats_7d.downloads or 0
+            views_30d = stats_30d.views or 0
+            downloads_30d = stats_30d.downloads or 0
+
+            trending_score = (
+                views_7d * 1.0 +
+                downloads_7d * 3.0 +
+                stars_count * 2.0
+            )
+
+            # 更新仓库字段
+            await db.execute(
+                update(Repository)
+                .where(Repository.id == repo_id)
+                .values(
+                    views_count_7d=views_7d,
+                    downloads_count_7d=downloads_7d,
+                    views_count_30d=views_30d,
+                    downloads_count_30d=downloads_30d,
+                    trending_score=trending_score,
+                    trending_updated_at=datetime.now(timezone.utc)
+                )
+            )
+
+        await db.commit()
+        logger.info("✓ 时间窗口统计更新完成")
+
+        # 5. 返回结果
+        return {
+            "success": True,
+            "message": f"成功为 {len(repositories)} 个仓库生成 {days} 天的模拟数据",
+            "stats": {
+                "repositories_count": len(repositories),
+                "days": days,
+                "total_records": processed,
+                "date_range": {
+                    "start": start_date.isoformat(),
+                    "end": end_date.isoformat()
+                },
+                "parameters": {
+                    "views_range": [views_min, views_max],
+                    "downloads_range": [downloads_min, downloads_max],
+                    "add_trends": add_trends,
+                    "weekend_effect": weekend_effect,
+                    "spike_probability": spike_probability
+                }
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"生成模拟数据失败: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"生成模拟数据失败: {str(e)}")

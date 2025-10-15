@@ -167,21 +167,6 @@ class RepositoryStar(BaseModel):
         from_attributes = True
 
 
-class RepositoryView(BaseModel):
-    id: int
-    repository_id: int
-    user: Optional[UserPublic] = None
-    ip_address: Optional[str] = None
-    user_agent: Optional[str] = None
-    referer: Optional[str] = None
-    view_type: str = "page_view"
-    target_path: Optional[str] = None
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
 class RepositoryStats(BaseModel):
     """仓库统计信息"""
 

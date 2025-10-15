@@ -89,69 +89,13 @@ async def update_repository_trending_stats(db: AsyncSession):
 
 
 async def calculate_unique_visitors(db: AsyncSession, target_date: date = None):
-    """计算指定日期的独立访客数
+    """计算指定日期的独立访客数（已废弃）
 
-    通过 repository_views 表统计每个仓库每天的独立访客（去重 IP 和用户ID）
-    建议每天凌晨运行，计算前一天的数据
+    注意：由于已删除 repository_views 表，此函数不再使用
+    独立访客数现在通过模拟数据或其他方式生成
     """
-    if target_date is None:
-        target_date = date.today() - timedelta(days=1)  # 默认计算前一天
-
-    try:
-        from app.models import RepositoryView
-        from sqlalchemy import and_, cast, Date
-
-        logger.info(f"开始计算 {target_date} 的独立访客数...")
-
-        # 获取所有活跃仓库
-        repo_query = select(Repository.id).where(Repository.is_active == True)
-        repo_result = await db.execute(repo_query)
-        repo_ids = [row[0] for row in repo_result.all()]
-
-        updated_count = 0
-        for repo_id in repo_ids:
-            try:
-                # 统计该仓库在目标日期的独立访客数（去重IP）
-                unique_visitors_query = select(
-                    func.count(func.distinct(RepositoryView.ip_address))
-                ).where(
-                    and_(
-                        RepositoryView.repository_id == repo_id,
-                        cast(RepositoryView.created_at, Date) == target_date,
-                        RepositoryView.ip_address.isnot(None)
-                    )
-                )
-                unique_visitors_result = await db.execute(unique_visitors_query)
-                unique_visitors = unique_visitors_result.scalar() or 0
-
-                # 更新 RepositoryDailyStats 表
-                from sqlalchemy.dialects.postgresql import insert
-                stmt = insert(RepositoryDailyStats).values(
-                    repository_id=repo_id,
-                    date=target_date,
-                    unique_visitors=unique_visitors
-                ).on_conflict_do_update(
-                    index_elements=['repository_id', 'date'],
-                    set_=dict(
-                        unique_visitors=unique_visitors,
-                        updated_at=func.now()
-                    )
-                )
-                await db.execute(stmt)
-                updated_count += 1
-
-            except Exception as e:
-                logger.error(f"计算仓库 {repo_id} 独立访客数失败: {e}")
-                continue
-
-        await db.commit()
-        logger.info(f"成功计算 {updated_count} 个仓库在 {target_date} 的独立访客数")
-        return updated_count
-
-    except Exception as e:
-        logger.error(f"计算独立访客数失败: {e}")
-        await db.rollback()
-        raise
+    logger.warning("calculate_unique_visitors 已废弃，repository_views 表已删除")
+    return 0
 
 
 # 定时任务调度函数

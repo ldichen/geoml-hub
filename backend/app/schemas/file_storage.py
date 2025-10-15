@@ -66,30 +66,6 @@ class FileUploadProgress(BaseModel):
     error_message: Optional[str] = None
 
 
-class FileDownload(BaseModel):
-    id: int
-    file_id: int
-    user_id: Optional[int] = None
-    ip_address: Optional[str] = None
-    user_agent: Optional[str] = None
-    referer: Optional[str] = None
-    download_method: str = "direct"
-    bytes_downloaded: int = 0
-    is_completed: bool = False
-    started_at: datetime
-    completed_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
-
-
-class FileDownloadCreate(BaseModel):
-    file_id: int
-    download_method: str = Field(default="direct", max_length=50)
-    user_agent: Optional[str] = None
-    referer: Optional[str] = None
-
-
 class SystemStorage(BaseModel):
     id: int
     date: datetime

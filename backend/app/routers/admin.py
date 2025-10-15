@@ -15,8 +15,6 @@ from app.models import (
     FileUploadSession,
     RepositoryFile,
     UserStorage,
-    RepositoryView,
-    FileDownload,
     RepositoryStar,
 )
 from app.dependencies.auth import get_current_active_user, require_admin
@@ -100,16 +98,21 @@ async def get_admin_dashboard(
         recent_uploads_result = await db.execute(recent_uploads_query)
         recent_uploads = recent_uploads_result.scalar() or 0
 
-        # 最近浏览
-        recent_views_query = select(func.count(RepositoryView.id)).where(
-            RepositoryView.created_at >= seven_days_ago
+        # 最近浏览（从 RepositoryDailyStats 聚合）
+        from app.models import RepositoryDailyStats
+        from datetime import date, timedelta
+
+        seven_days_ago_date = date.today() - timedelta(days=7)
+
+        recent_views_query = select(func.sum(RepositoryDailyStats.views_count)).where(
+            RepositoryDailyStats.date >= seven_days_ago_date
         )
         recent_views_result = await db.execute(recent_views_query)
         recent_views = recent_views_result.scalar() or 0
 
-        # 最近下载
-        recent_downloads_query = select(func.count(FileDownload.id)).where(
-            FileDownload.started_at >= seven_days_ago
+        # 最近下载（从 RepositoryDailyStats 聚合）
+        recent_downloads_query = select(func.sum(RepositoryDailyStats.downloads_count)).where(
+            RepositoryDailyStats.date >= seven_days_ago_date
         )
         recent_downloads_result = await db.execute(recent_downloads_query)
         recent_downloads = recent_downloads_result.scalar() or 0
@@ -834,7 +837,10 @@ async def hard_delete_repository(
                             repository_name=image.harbor_repository_path,
                         )
                         deletion_summary["harbor_cleanup"].append(
-                            {"image_name": image.harbor_repository_path, "status": "deleted"}
+                            {
+                                "image_name": image.harbor_repository_path,
+                                "status": "deleted",
+                            }
                         )
 
                         # 从mManager控制器清理镜像
@@ -875,6 +881,7 @@ async def hard_delete_repository(
         # 5. 更新用户存储使用量
         try:
             from app.services.storage_service import storage_service
+
             await storage_service.update_user_storage(db, repository.owner_id)
         except Exception as e:
             logger.warning(f"更新用户存储使用量失败: {e}")

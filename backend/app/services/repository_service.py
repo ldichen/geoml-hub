@@ -14,11 +14,9 @@ from app.models import (
     Repository,
     RepositoryFile,
     RepositoryStar,
-    RepositoryView,
     RepositoryClassification,
     RepositoryDailyStats,
     User,
-    FileDownload,
 )
 from app.schemas.repository import RepositoryCreate, RepositoryUpdate
 from app.utils.yaml_parser import YAMLFrontmatterParser
@@ -138,14 +136,19 @@ class RepositoryService:
                 print(f"Failed to add classification: {e}")
 
         # 处理任务分类关联
-        if hasattr(repo_data, "task_classification_ids") and repo_data.task_classification_ids:
-            from app.services.task_classification_service import TaskClassificationService
+        if (
+            hasattr(repo_data, "task_classification_ids")
+            and repo_data.task_classification_ids
+        ):
+            from app.services.task_classification_service import (
+                TaskClassificationService,
+            )
+
             task_service = TaskClassificationService(self.db)
             try:
                 for task_id in repo_data.task_classification_ids:
                     await task_service.add_to_repository(
-                        repository_id=db_repo.id,
-                        task_classification_id=task_id
+                        repository_id=db_repo.id, task_classification_id=task_id
                     )
                 # 重新加载repository以获取任务分类关联
                 await self.db.refresh(db_repo)
@@ -153,16 +156,23 @@ class RepositoryService:
                 print(f"Failed to add task classifications: {e}")
         elif metadata and "tasks" in metadata:
             # 如果README中有tasks字段，从README同步到数据库
-            from app.services.task_classification_service import TaskClassificationService
+            from app.services.task_classification_service import (
+                TaskClassificationService,
+            )
+
             task_service = TaskClassificationService(self.db)
             try:
                 for task_name in metadata["tasks"]:
                     # 根据名称查找task classification
-                    task_classification = await self.metadata_sync._find_task_classification_by_name(task_name)
+                    task_classification = (
+                        await self.metadata_sync._find_task_classification_by_name(
+                            task_name
+                        )
+                    )
                     if task_classification:
                         await task_service.add_to_repository(
                             repository_id=db_repo.id,
-                            task_classification_id=task_classification.id
+                            task_classification_id=task_classification.id,
                         )
                 await self.db.refresh(db_repo)
             except Exception as e:
@@ -787,18 +797,7 @@ class RepositoryService:
         view_type: str = "page_view",
         target_path: Optional[str] = None,
     ) -> None:
-        """记录仓库访问"""
-        view = RepositoryView(
-            repository_id=repository_id,
-            user_id=user_id,
-            ip_address=ip_address,
-            user_agent=user_agent,
-            referer=referer,
-            view_type=view_type,
-            target_path=target_path,
-        )
-
-        self.db.add(view)
+        """记录仓库访问（简化版：不记录详细日志）"""
 
         # 更新仓库的访问计数
         repo_query = select(Repository).where(Repository.id == repository_id)
@@ -810,16 +809,24 @@ class RepositoryService:
 
         # 更新当日聚合统计（使用 UPSERT）
         today = date.today()
-        stmt = insert(RepositoryDailyStats).values(
-            repository_id=repository_id,
-            date=today,
-            views_count=1,
-            unique_visitors=0  # 稍后通过定时任务计算
-        ).on_conflict_do_update(
-            index_elements=['repository_id', 'date'],
-            set_=dict(
-                views_count=RepositoryDailyStats.views_count + 1,
-                updated_at=func.now()
+
+        # 不再记录独立访客数（unique_visitors），因为没有原始IP记录
+        stmt = (
+            insert(RepositoryDailyStats)
+            .values(
+                repository_id=repository_id,
+                date=today,
+                views_count=1,
+                unique_visitors=0,
+                downloads_count=0,
+                unique_downloaders=0,
+            )
+            .on_conflict_do_update(
+                index_elements=["repository_id", "date"],
+                set_=dict(
+                    views_count=RepositoryDailyStats.views_count + 1,
+                    updated_at=func.now(),
+                ),
             )
         )
         await self.db.execute(stmt)
@@ -1048,10 +1055,12 @@ class RepositoryService:
                     try:
                         await self.minio_service.delete_file(
                             bucket_name=existing_file.minio_bucket,
-                            object_key=existing_file.minio_object_key
+                            object_key=existing_file.minio_object_key,
                         )
                     except Exception as e:
-                        logger.warning(f"Failed to delete MinIO file {existing_file.minio_object_key}: {e}")
+                        logger.warning(
+                            f"Failed to delete MinIO file {existing_file.minio_object_key}: {e}"
+                        )
 
                     # Hard delete: directly from database delete record
                     await self.db.delete(existing_file)
@@ -1205,17 +1214,7 @@ class RepositoryService:
             # TODO: 检查用户权限
             pass
 
-        # 记录下载
-        download = FileDownload(
-            file_id=file_id,
-            user_id=user_id,
-            ip_address=ip_address,
-            user_agent=user_agent,
-            referer=referer,
-        )
-        self.db.add(download)
-
-        # 更新下载计数
+        # 更新下载计数（简化版：不记录详细日志）
         setattr(
             file_obj.repository,
             "downloads_count",
@@ -1224,16 +1223,20 @@ class RepositoryService:
 
         # 更新当日聚合统计（使用 UPSERT）
         today = date.today()
-        stmt = insert(RepositoryDailyStats).values(
-            repository_id=file_obj.repository.id,
-            date=today,
-            downloads_count=1,
-            unique_downloaders=0  # 稍后通过定时任务计算
-        ).on_conflict_do_update(
-            index_elements=['repository_id', 'date'],
-            set_=dict(
-                downloads_count=RepositoryDailyStats.downloads_count + 1,
-                updated_at=func.now()
+        stmt = (
+            insert(RepositoryDailyStats)
+            .values(
+                repository_id=file_obj.repository.id,
+                date=today,
+                downloads_count=1,
+                unique_downloaders=0,  # 稍后通过定时任务计算
+            )
+            .on_conflict_do_update(
+                index_elements=["repository_id", "date"],
+                set_=dict(
+                    downloads_count=RepositoryDailyStats.downloads_count + 1,
+                    updated_at=func.now(),
+                ),
             )
         )
         await self.db.execute(stmt)
@@ -1277,22 +1280,20 @@ class RepositoryService:
         top_files_result = await self.db.execute(top_files_query)
         top_files = top_files_result.scalars().all()
 
-        # 获取今日统计（简化版本，实际应该使用时间范围查询）
-        today_downloads_query = select(func.count(FileDownload.id)).where(
-            FileDownload.file_id.in_(
-                select(RepositoryFile.id).where(
-                    RepositoryFile.repository_id == repository_id
-                )
+        # 获取今日统计（从 RepositoryDailyStats 查询）
+        today = date.today()
+
+        daily_stats_query = select(RepositoryDailyStats).where(
+            and_(
+                RepositoryDailyStats.repository_id == repository_id,
+                RepositoryDailyStats.date == today
             )
         )
-        today_downloads_result = await self.db.execute(today_downloads_query)
-        daily_downloads = today_downloads_result.scalar() or 0
+        daily_stats_result = await self.db.execute(daily_stats_query)
+        daily_stats = daily_stats_result.scalar_one_or_none()
 
-        today_views_query = select(func.count(RepositoryView.id)).where(
-            RepositoryView.repository_id == repository_id
-        )
-        today_views_result = await self.db.execute(today_views_query)
-        daily_views = today_views_result.scalar() or 0
+        daily_downloads = daily_stats.downloads_count if daily_stats else 0
+        daily_views = daily_stats.views_count if daily_stats else 0
 
         return {
             "stars_count": repository.stars_count,
@@ -1513,13 +1514,17 @@ class RepositoryService:
     ) -> dict:
         """重命名仓库中的文件"""
         # 查找要重命名的文件
-        file_query = select(RepositoryFile).options(
-            selectinload(RepositoryFile.repository).selectinload(Repository.owner)
-        ).where(
-            and_(
-                RepositoryFile.repository_id == repository_id,
-                RepositoryFile.file_path == old_path,
-                RepositoryFile.is_deleted == False,
+        file_query = (
+            select(RepositoryFile)
+            .options(
+                selectinload(RepositoryFile.repository).selectinload(Repository.owner)
+            )
+            .where(
+                and_(
+                    RepositoryFile.repository_id == repository_id,
+                    RepositoryFile.file_path == old_path,
+                    RepositoryFile.is_deleted == False,
+                )
             )
         )
         file_result = await self.db.execute(file_query)
@@ -1593,8 +1598,7 @@ class RepositoryService:
                 try:
                     # 需要读取文件内容来更新 readme_content
                     file_content = await self.minio_service.get_file_content(
-                        bucket_name=file_record.minio_bucket,
-                        object_key=new_object_key
+                        bucket_name=file_record.minio_bucket, object_key=new_object_key
                     )
                     content_str = file_content.decode("utf-8")
                     repository.readme_content = content_str
@@ -1603,14 +1607,22 @@ class RepositoryService:
                     metadata = self.yaml_parser.parse(content_str)
                     if metadata:
                         repository.repo_metadata = metadata
-                        classification_info = self.yaml_parser.extract_classification_info(metadata)
+                        classification_info = (
+                            self.yaml_parser.extract_classification_info(metadata)
+                        )
                         if classification_info:
                             await self.remove_repository_classification(repository_id)
-                            classification = await self._find_classification_by_name(classification_info)
+                            classification = await self._find_classification_by_name(
+                                classification_info
+                            )
                             if classification:
-                                await self.add_repository_classification(repository_id, classification.id)
+                                await self.add_repository_classification(
+                                    repository_id, classification.id
+                                )
                 except Exception as e:
-                    logger.warning(f"Failed to update README content during rename: {e}")
+                    logger.warning(
+                        f"Failed to update README content during rename: {e}"
+                    )
 
             # 3. 提交数据库更改
             await self.db.commit()
@@ -1618,8 +1630,7 @@ class RepositoryService:
             # 4. 删除MinIO中的旧文件
             try:
                 await self.minio_service.delete_file(
-                    bucket_name=file_record.minio_bucket,
-                    object_key=old_object_key
+                    bucket_name=file_record.minio_bucket, object_key=old_object_key
                 )
             except Exception as e:
                 logger.warning(f"Failed to delete old MinIO file {old_object_key}: {e}")
@@ -1636,7 +1647,11 @@ class RepositoryService:
                     "filename": file_record.filename,
                     "file_path": file_record.file_path,
                     "file_size": file_record.file_size,
-                    "updated_at": file_record.updated_at.isoformat() if file_record.updated_at else None,
+                    "updated_at": (
+                        file_record.updated_at.isoformat()
+                        if file_record.updated_at
+                        else None
+                    ),
                 },
             }
 
@@ -1645,8 +1660,7 @@ class RepositoryService:
             # 如果数据库操作失败，尝试清理可能已创建的新MinIO文件
             try:
                 await self.minio_service.delete_file(
-                    bucket_name=file_record.minio_bucket,
-                    object_key=new_object_key
+                    bucket_name=file_record.minio_bucket, object_key=new_object_key
                 )
             except:
                 pass

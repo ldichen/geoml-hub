@@ -57,33 +57,6 @@ class FileUploadSession(Base):
     repository = relationship("Repository")
 
 
-class FileDownload(Base):
-    """文件下载记录表"""
-    __tablename__ = "file_downloads"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    file_id = Column(Integer, ForeignKey("repository_files.id", ondelete="CASCADE"), nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)  # 可以是匿名下载
-    
-    # 下载信息
-    ip_address = Column(String(45))
-    user_agent = Column(Text)
-    referer = Column(String(1000))
-    download_method = Column(String(50), default="direct")  # direct, git, api
-    
-    # 下载状态
-    bytes_downloaded = Column(BIGINT, default=0)
-    is_completed = Column(Boolean, default=False)
-    
-    # 时间戳
-    started_at = Column(DateTime(timezone=True), server_default=func.now())
-    completed_at = Column(DateTime(timezone=True))
-    
-    # 关系
-    file = relationship("RepositoryFile", back_populates="downloads")
-    user = relationship("User")
-
-
 class SystemStorage(Base):
     """系统存储统计表"""
     __tablename__ = "system_storage"

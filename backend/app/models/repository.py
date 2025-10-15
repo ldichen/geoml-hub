@@ -64,7 +64,6 @@ class Repository(Base):
     owner = relationship("User", back_populates="repositories")
     files = relationship("RepositoryFile", back_populates="repository", cascade="all, delete-orphan")
     stars = relationship("RepositoryStar", back_populates="repository", cascade="all, delete-orphan")
-    views = relationship("RepositoryView", back_populates="repository", cascade="all, delete-orphan")
     classifications = relationship("RepositoryClassification", back_populates="repository", cascade="all, delete-orphan")
     task_classifications = relationship("RepositoryTaskClassification", back_populates="repository", cascade="all, delete-orphan")
     model_services = relationship("ModelService", back_populates="repository", cascade="all, delete-orphan")
@@ -124,7 +123,6 @@ class RepositoryFile(Base):
     
     # 关系
     repository = relationship("Repository", back_populates="files")
-    downloads = relationship("FileDownload", back_populates="file", cascade="all, delete-orphan")
 
 
 class RepositoryStar(Base):
@@ -143,28 +141,6 @@ class RepositoryStar(Base):
     # 关系
     user = relationship("User", back_populates="stars")
     repository = relationship("Repository", back_populates="stars")
-
-
-class RepositoryView(Base):
-    """仓库访问记录表"""
-    __tablename__ = "repository_views"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    repository_id = Column(Integer, ForeignKey("repositories.id", ondelete="CASCADE"), nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)  # 可以是匿名访问
-    ip_address = Column(String(45))  # IPv6 支持
-    user_agent = Column(Text)
-    referer = Column(String(1000))
-    
-    # 访问详情
-    view_type = Column(String(50), default="page_view")  # page_view, file_view, download
-    target_path = Column(String(1000))  # 访问的具体路径或文件
-    
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
-    # 关系
-    repository = relationship("Repository", back_populates="views")
-    user = relationship("User", back_populates="repository_views")
 
 
 class RepositoryClassification(Base):

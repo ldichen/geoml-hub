@@ -1,7 +1,19 @@
 <script>
 	import { onMount } from 'svelte';
 	import { locale, _ } from 'svelte-i18n';
-	import { Search, Globe, Sun, Moon, Monitor, Menu, X, User, LogOut, Plus, Settings } from 'lucide-svelte';
+	import {
+		Search,
+		Globe,
+		Sun,
+		Moon,
+		Monitor,
+		Menu,
+		X,
+		User,
+		LogOut,
+		Plus,
+		Settings
+	} from 'lucide-svelte';
 	import { user, isAuthenticated, logout } from '$lib/stores/auth';
 	import { api } from '$lib/utils/api';
 	import UserAvatar from './UserAvatar.svelte';
@@ -100,7 +112,7 @@
 					title="切换主题模式"
 				>
 					<svelte:component this={currentTheme.icon} class="w-4 h-4" />
-					<span class="hidden sm:inline">{currentTheme.label}</span>
+					<!-- <span class="hidden sm:inline">{currentTheme.label}</span> -->
 				</button>
 
 				<!-- Language Toggle -->
@@ -115,7 +127,7 @@
 
 					{#if showLanguageDropdown}
 						<div
-							class="absolute right-0 mt-2 w-40 bg-gray-800 rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-50"
+							class="absolute right-0 mt-2 w-20 bg-gray-800 rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-50"
 						>
 							<div class="py-1">
 								{#each languages as lang}
@@ -126,7 +138,7 @@
 											: ''}"
 										on:click={() => switchLanguage(lang.value)}
 									>
-										<span class="text-lg">{lang.flag}</span>
+										<!-- <span class="text-lg">{lang.flag}</span> -->
 										<span>{lang.label}</span>
 									</button>
 								{/each}
