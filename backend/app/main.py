@@ -83,7 +83,9 @@ app.include_router(
     classifications.router, prefix="/api/classifications", tags=["classifications"]
 )
 app.include_router(
-    task_classifications.router, prefix="/api/task-classifications", tags=["task-classifications"]
+    task_classifications.router,
+    prefix="/api/task-classifications",
+    tags=["task-classifications"],
 )
 # v2.0 核心路由
 app.include_router(users.router, prefix="/api/users", tags=["users"])
@@ -92,13 +94,13 @@ app.include_router(
 )
 # 搜索和发现
 app.include_router(search.router, prefix="/api/search", tags=["search"])
-# 顶级发现端点
+# 顶级发现端点 (修改)
 app.include_router(discover.router, prefix="/api", tags=["discover"])
 # 文件管理
 app.include_router(files.router, prefix="/api/files", tags=["files"])
 # 个人文件空间
 app.include_router(personal_files.router, tags=["personal-files"])
-# 文件编辑与版本控制
+# 文件编辑与版本控制(修改)
 app.include_router(file_editor.router, prefix="/api", tags=["file-editor"])
 # 元数据管理
 app.include_router(metadata.router, prefix="/api/metadata", tags=["metadata"])

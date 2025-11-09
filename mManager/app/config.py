@@ -1,5 +1,12 @@
 """
 Author: DiChen
+Date: 2025-08-06 02:06:03
+LastEditors: DiChen
+LastEditTime: 2025-11-06 21:38:59
+"""
+
+"""
+Author: DiChen
 Date: 2025-08-02 03:16:01
 LastEditors: DiChen
 LastEditTime: 2025-08-04 12:31:54
@@ -20,7 +27,7 @@ class Settings(BaseSettings):
     # API 配置
     api_key: str = os.getenv("MMANAGER_API_KEY", "mmanager-default-key")
     host: str = "0.0.0.0"
-    port: int = 8000
+    port: int = 8001
 
     # Docker 配置
     docker_host: str = os.getenv("DOCKER_HOST", "unix:///var/run/docker.sock")

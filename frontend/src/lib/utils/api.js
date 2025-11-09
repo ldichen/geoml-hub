@@ -469,7 +469,7 @@ class ApiClient {
 
 			// Handle array parameters (like classification_ids)
 			if (Array.isArray(value)) {
-				value.forEach(item => {
+				value.forEach((item) => {
 					if (item !== undefined && item !== null) {
 						params.append(key, item);
 					}
@@ -539,11 +539,13 @@ class ApiClient {
 
 		// 默认查询最近30天
 		const endDate = params.end_date || new Date().toISOString().split('T')[0];
-		const startDate = params.start_date || (() => {
-			const date = new Date();
-			date.setDate(date.getDate() - 30);
-			return date.toISOString().split('T')[0];
-		})();
+		const startDate =
+			params.start_date ||
+			(() => {
+				const date = new Date();
+				date.setDate(date.getDate() - 30);
+				return date.toISOString().split('T')[0];
+			})();
 
 		searchParams.append('start_date', startDate);
 		searchParams.append('end_date', endDate);
@@ -616,7 +618,7 @@ class ApiClient {
 				searchParams.append(key, value);
 			}
 		});
-		return this.request(`/api/services/${owner}/${name}?${searchParams}`);
+		return this.request(`/api/services/servicelists/${owner}/${name}?${searchParams}`);
 	}
 
 	async createService(owner, name, data, onProgress = null) {
@@ -1073,9 +1075,12 @@ class ApiClient {
 	repositories = {
 		// Add sphere classification to repository
 		addClassification: async (owner, repoName, classificationId) => {
-			return this.request(`/api/repositories/${owner}/${repoName}/classifications?classification_id=${classificationId}`, {
-				method: 'POST'
-			});
+			return this.request(
+				`/api/repositories/${owner}/${repoName}/classifications?classification_id=${classificationId}`,
+				{
+					method: 'POST'
+				}
+			);
 		},
 
 		// Remove all sphere classifications from repository
@@ -1087,16 +1092,22 @@ class ApiClient {
 
 		// Add task classification to repository
 		addTaskClassification: async (owner, repoName, taskClassificationId) => {
-			return this.request(`/api/repositories/${owner}/${repoName}/task-classifications?task_classification_id=${taskClassificationId}`, {
-				method: 'POST'
-			});
+			return this.request(
+				`/api/repositories/${owner}/${repoName}/task-classifications?task_classification_id=${taskClassificationId}`,
+				{
+					method: 'POST'
+				}
+			);
 		},
 
 		// Remove task classification from repository
 		removeTaskClassification: async (owner, repoName, taskClassificationId) => {
-			return this.request(`/api/repositories/${owner}/${repoName}/task-classifications/${taskClassificationId}`, {
-				method: 'DELETE'
-			});
+			return this.request(
+				`/api/repositories/${owner}/${repoName}/task-classifications/${taskClassificationId}`,
+				{
+					method: 'DELETE'
+				}
+			);
 		},
 
 		// Get repository task classifications

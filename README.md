@@ -261,62 +261,721 @@ GeoML-hub/
 └── 📄 DEPLOYMENT.md              # 部署文档 (✅ 已实现)
 ```
 
-## 🔗 系统关系架构 v2.0
+## 🏗️ 系统整体架构 v2.0
 
-### 核心实体关系
+### 1. 架构概述
 
-```mermaid
-erDiagram
-    USER_PROFILES ||--o{ MODEL_REPOSITORIES : owns
-    USER_PROFILES ||--o{ USER_FOLLOWS : follows
-    USER_PROFILES ||--o{ REPOSITORY_STARS : stars
-    USER_PROFILES ||--|| USER_STORAGE : has
+GeoML-Hub v2.0 采用**现代化微服务分层架构**，参考 Hugging Face 和 GitHub 的设计理念，构建了一个完整的地理科学机器学习模型托管平台。系统架构遵循前后端分离、领域驱动设计、关注点分离等软件工程最佳实践。
 
-    MODEL_REPOSITORIES ||--o{ REPOSITORY_FILES : contains
-    MODEL_REPOSITORIES ||--o{ MODEL_CLASSIFICATIONS : categorized_by
-    MODEL_REPOSITORIES ||--o{ REPOSITORY_STARS : receives_stars
-    MODEL_REPOSITORIES ||--o{ REPOSITORY_VIEWS : receives_views
+#### 核心架构特点
 
-    CLASSIFICATIONS ||--o{ MODEL_CLASSIFICATIONS : used_in
-    CLASSIFICATIONS ||--o{ CLASSIFICATIONS : parent_child
+- **前后端分离**: SvelteKit 前端 + FastAPI 后端，通过 RESTful API 通信
+- **异步高性能**: 全面采用 Python asyncio + SQLAlchemy 2.0 异步模式
+- **双存储架构**: PostgreSQL 关系型数据库 + MinIO 对象存储
+- **用户命名空间**: `/{username}/{repo}` 路由设计，类似 GitHub
+- **领域驱动设计**: 按业务领域划分模块（用户域、仓库域、文件域、服务域等）
+- **事件驱动统计**: 基于用户行为触发的实时统计更新机制
+- **容器化部署**: Docker + Docker Compose 一键部署
 
-    REPOSITORY_FILES ||--o{ FILE_DOWNLOADS : downloaded
-    REPOSITORY_FILES ||--|| FILE_UPLOAD_SESSIONS : uploaded_via
+---
+
+### 2. 系统分层架构
+
+#### 2.1 展示层 (Presentation Layer)
+
+**技术栈**: SvelteKit + TypeScript + TailwindCSS + CodeMirror
+
+**职责**:
+- 用户界面渲染与交互
+- 客户端路由管理
+- 状态管理（Svelte Stores）
+- API 请求封装
+- 表单验证与错误处理
+
+**核心页面模块**:
+- **首页模块**: 仓库列表、分类浏览、趋势展示
+- **用户模块**: 个人主页、关注/粉丝、仓库管理
+- **仓库模块**: 仓库详情、文件浏览、README 展示、统计趋势
+- **编辑模块**: 文件编辑器、版本控制、协作会话、草稿管理
+- **搜索模块**: 全文搜索、多维筛选、分类导航
+- **管理模块**: 管理员后台、用户管理、系统监控
+
+**可复用组件**:
+- `RepositoryCard` - 仓库卡片展示
+- `FileTree` - 文件目录树
+- `YAMLMetadataEditor` - YAML 元数据编辑器
+- `TrendChart` - 统计趋势图表
+- `NotificationCenter` - 通知中心
+- `PersonalFileManager` - 个人文件管理器
+
+---
+
+#### 2.2 API 层 (API Layer)
+
+**技术栈**: FastAPI + Pydantic + JWT 认证
+
+**职责**:
+- RESTful API 端点定义
+- 请求参数验证（Pydantic schemas）
+- 响应序列化
+- 认证与授权（JWT Token + Depends）
+- 异常处理与错误响应
+- API 文档自动生成（OpenAPI/Swagger）
+
+**API 路由模块**:
+
+| 路由模块 | 路径前缀 | 主要功能 | 状态 |
+|---------|---------|---------|------|
+| 认证 API | `/api/auth/*` | 登录、注册、Token 刷新 | ✅ 已实现 |
+| 用户 API | `/api/users/*` | 用户 CRUD、关注、统计 | ✅ 已实现 |
+| 仓库 API | `/api/repositories/*` | 仓库 CRUD、Star、趋势统计 | ✅ 已实现 |
+| 文件 API | `/api/files/*` | 文件上传/下载、分块上传 | ✅ 已实现 |
+| 编辑器 API | `/api/file-editor/*` | 版本管理、编辑会话、草稿 | ✅ 已实现 |
+| 元数据 API | `/api/metadata/*` | YAML 解析、验证、更新 | ✅ 已实现 |
+| 搜索 API | `/api/search/*` | 全文搜索、高级筛选 | ✅ 已实现 |
+| 分类 API | `/api/classifications/*` | 分类树、统计 | ✅ 已实现 |
+| 发现 API | `/api/discover/*` | 趋势、推荐、精选 | ✅ 已实现 |
+| 服务 API | `/api/services/*` | 模型服务管理、部署 | ✅ 已实现 |
+| 管理 API | `/api/admin/*` | 管理员功能、系统监控 | ✅ 已实现 |
+| 个人文件 API | `/api/personal-files/*` | 个人文件空间管理 | ✅ 已实现 |
+
+---
+
+#### 2.3 业务逻辑层 (Business Logic Layer)
+
+**技术栈**: Python Service Classes + Domain Logic
+
+**职责**:
+- 业务规则实现
+- 领域模型操作
+- 事务管理
+- 跨领域协调
+- 外部服务集成
+
+**核心服务模块**:
+
+**认证与用户域**:
+- `AuthService`: JWT 认证、Token 管理、外部认证集成
+- `UserService`: 用户 CRUD、关注关系、统计更新、存储配额管理
+
+**仓库与文件域**:
+- `RepositoryService`: 仓库 CRUD、Star 管理、访问统计、趋势计算
+- `FileUploadService`: 分块上传、会话管理、完整性校验
+- `MinIOService`: 对象存储操作、预签名 URL、健康检查
+
+**文件编辑域**:
+- `FileEditorService`: 集成版本、会话、权限、草稿、模板管理
+  - `FileVersionService`: 文件版本历史、差异对比
+  - `FileEditSessionService`: 协作编辑会话、锁定机制
+  - `FilePermissionService`: 编辑权限控制
+  - `FileDraftService`: 自动保存草稿、恢复机制
+
+**元数据与分类域**:
+- `MetadataService`: YAML frontmatter 解析、元数据验证、索引构建
+- `ClassificationService`: 三级分类树管理、映射关系、统计分析
+
+**模型服务域**:
+- `ModelService`: 容器编排、生命周期管理、资源分配、健康监控
+- `ServiceScheduler`: 定期健康检查、空闲清理、失败重试
+
+**个人文件域**:
+- `PersonalFilesService`: 个人文件空间管理、文件夹操作、下载统计
+
+**统计与调度域**:
+- `StatsScheduler`: 统计更新定时任务、趋势计算、时间窗口聚合
+
+---
+
+#### 2.4 数据访问层 (Data Access Layer)
+
+**技术栈**: SQLAlchemy 2.0 (Async ORM) + Alembic
+
+**职责**:
+- 数据库连接池管理
+- ORM 模型定义
+- 数据库会话管理
+- 查询优化
+- 数据库迁移（Alembic）
+
+**数据模型组织**:
+
+| 领域 | 核心模型 | 说明 |
+|------|---------|------|
+| **用户域** | `User`, `UserFollow`, `UserStorage` | 用户信息、社交关系、存储配额 |
+| **仓库域** | `Repository`, `RepositoryFile`, `RepositoryStar`, `RepositoryDailyStats` | 仓库元数据、文件索引、社交互动、统计聚合 |
+| **分类域** | `Classification`, `TaskClassification`, `RepositoryClassification` | 三级分类树、任务分类、映射关系 |
+| **文件编辑域** | `FileVersion`, `FileEditSession`, `FileEditPermission`, `FileDraft`, `FileTemplate` | 版本控制、协作编辑、权限管理、草稿、模板 |
+| **个人文件域** | `PersonalFile`, `PersonalFolder`, `PersonalFileDownload` | 个人文件、文件夹、下载记录 |
+| **服务域** | `ModelService`, `ServiceInstance`, `ServiceLog`, `ServiceHealthCheck` | 模型服务、容器实例、日志、健康检查 |
+| **系统域** | `FileUploadSession`, `SystemStorage`, `MinIOServiceHealth`, `Image` | 上传会话、系统统计、存储健康、镜像管理 |
+
+**索引优化策略**:
+- 用户名/邮箱唯一索引（快速查找）
+- 仓库全文搜索 GIN 索引（高效搜索）
+- 分类层级 B-tree 索引（层级查询）
+- 统计时间范围索引（趋势查询）
+- 服务状态/优先级复合索引（服务调度）
+
+---
+
+#### 2.5 存储层 (Storage Layer)
+
+**2.5.1 关系型数据库 (PostgreSQL 14+)**
+
+**用途**:
+- 结构化数据存储（用户、仓库、文件元信息）
+- 关系数据管理（关注、Star、分类映射）
+- 事务保证（ACID 特性）
+- 复杂查询支持（JOIN、聚合、全文搜索）
+- 数据完整性约束（外键、唯一约束、检查约束）
+
+**核心表组织**:
+- 用户表族: 15+ 张表（用户、关注、存储、个人文件）
+- 仓库表族: 10+ 张表（仓库、文件、Star、统计）
+- 文件编辑表族: 5 张表（版本、会话、权限、草稿、模板）
+- 服务表族: 4 张表（服务、实例、日志、健康检查）
+- 分类表族: 3 张表（分类树、任务分类、映射）
+
+**2.5.2 对象存储 (MinIO - S3 兼容)**
+
+**用途**:
+- 大文件存储（模型文件、数据集、文档）
+- 文件版本管理（版本控制）
+- 临时文件存储（上传缓存）
+- 静态资源托管（头像、图片）
+
+**Bucket 组织结构**:
+```
+repositories/          # 仓库文件
+  └── {username}/{repo_name}/{file_path}
+
+personal-files/        # 个人文件
+  └── {user_id}/{folder_path}/{filename}
+
+temp-uploads/          # 临时上传
+  └── {session_id}/{chunk_number}
+
+avatars/               # 用户头像
+  └── {user_id}.jpg
 ```
 
-### 分层架构设计
+**MinIO 特性利用**:
+- 预签名 URL（临时访问授权，1小时有效期）
+- 分块上传（支持大文件，默认 5MB/块）
+- 版本控制（文件历史追踪）
+- 服务端加密（数据安全）
+- CDN 加速集成（下载优化）
+- 健康监控（可用性检查）
 
-#### 第一层：用户身份层
+---
 
+### 3. 关键架构设计
+
+#### 3.1 用户命名空间架构
+
+**设计理念**: 类似 GitHub 的用户空间设计，每个用户拥有独立的命名空间。
+
+**路由结构**:
 ```
-👤 外部认证服务 (JWT Token + 用户信息同步)
+/{username}                    # 用户主页
+/{username}/{repo}             # 仓库主页
+/{username}/{repo}/blob/...    # 文件查看
+/{username}/{repo}/edit/...    # 文件编辑
+/{username}/{repo}/commits     # 提交历史
+/{username}/{repo}/services    # 模型服务
+```
+
+**优势**:
+- 清晰的所有权关系
+- 易于理解的 URL 结构
+- 支持用户品牌建设
+- 便于权限控制
+
+---
+
+#### 3.2 YAML 驱动元数据架构
+
+**设计理念**: README.md 文件中的 YAML frontmatter 作为仓库元数据的唯一真实来源。
+
+**元数据流程**:
+```
+1. 用户编辑 README.md 并添加 YAML frontmatter
+   ↓
+2. MetadataService 自动解析 YAML
+   ↓
+3. 验证元数据格式和必填字段
+   ↓
+4. 存储到 repository.repo_metadata (JSON 字段)
+   ↓
+5. 构建全文搜索索引
+   ↓
+6. 更新分类映射关系
+```
+
+**YAML 元数据结构示例**:
+```yaml
+---
+title: "地理空间降水预测模型"
+tags: ["precipitation", "deep-learning", "LSTM"]
+license: "MIT"
+framework: "TensorFlow"
+task: "regression"
+base_model: "LSTM-Attention"
+datasets: ["ERA5", "GPM"]
+metrics:
+  RMSE: 2.34
+  MAE: 1.89
+---
+```
+
+**优势**:
+- 零配置发布（无需额外配置文件）
+- 版本控制友好（Git 可追踪）
+- 人类可读（Markdown 格式）
+- 灵活扩展（自定义字段）
+
+---
+
+#### 3.3 简化统计架构 (v2.0 优化)
+
+**旧架构问题**:
+- 三层冗余：`repository_views` → `repository_daily_stats` → `repository` 缓存
+- 存储浪费：详细日志占用 90%+ 存储空间
+- 查询低效：需要扫描大量日志记录
+
+**新架构设计**:
+
+**两层聚合架构**:
+```
+RepositoryDailyStats (每日聚合)
     ↓
-👥 用户资料管理 (user_profiles)
+Repository (时间窗口缓存)
+```
+
+**统计字段**:
+- `RepositoryDailyStats`: 每日聚合（`date`, `views_count`, `downloads_count`, `unique_visitors`）
+- `Repository`: 缓存字段（`views_count_7d`, `views_count_30d`, `downloads_count_7d`, `downloads_count_30d`, `trending_score`）
+
+**更新机制**:
+```
+用户访问/下载
     ↓
-📁 用户个人空间 (/{username} 命名空间)
-```
-
-#### 第二层：仓库管理层
-
-```
-📁 用户空间 (所有权关系)
+record_view() / download_file()
     ↓
-📦 模型仓库 (model_repositories)
-    ├── 📝 README.md → 🔧 YAML元数据解析
-    ├── 📄 仓库文件 (repository_files)
-    ├── 🗂️ 分类标签 (model_classifications)
-    └── 📈 社交统计 (stars, views, downloads)
+更新 Repository.views_count (总计)
+    ↓
+UPSERT RepositoryDailyStats (今日聚合)
+    ↓
+StatsScheduler 定时任务 (每小时)
+    ↓
+聚合计算时间窗口统计 (7d, 30d)
+    ↓
+更新 Repository 缓存字段
 ```
 
-#### 第三层：内容组织层
+**优势**:
+- 减少 90%+ 存储空间
+- 查询性能提升 10x+
+- 统计计算成本降低
+- 数据一致性更好
 
+---
+
+#### 3.4 文件版本控制架构
+
+**设计理念**: 类似 Git 的版本控制，支持文件历史追踪、差异对比、协作编辑。
+
+**版本管理**:
+- `FileVersion`: 每次提交创建新版本记录
+- 版本号自增：`version_number` 字段
+- 完整历史：保留所有历史版本文件（MinIO）
+- 差异计算：服务端计算版本差异
+
+**协作编辑**:
+- `FileEditSession`: 编辑会话管理
+- 乐观锁机制：`lock_until` 字段（默认 30 分钟）
+- 自动释放：过期自动解锁
+- 冲突检测：基于版本号比对
+
+**草稿系统**:
+- `FileDraft`: 未提交的编辑内容
+- 自动保存：每 30 秒保存一次
+- 恢复机制：可恢复到任意草稿
+- 清理策略：7 天后自动清理
+
+---
+
+#### 3.5 模型服务容器编排架构
+
+**设计理念**: 支持模型推理服务的容器化部署、资源管理、健康监控。
+
+**服务生命周期**:
 ```
-📦 仓库内容
-    ├── 📁 文件管理 → 💾 MinIO对象存储
-    ├── 🏷️ 智能分类 → 📊 三级分类体系
-    ├── 👥 社区功能 → ⭐ 收藏、关注、统计
-    └── 🔍 搜索发现 → 🎯 多维度筛选
+1. Created (创建)
+   ↓
+2. Starting (启动中) - 拉取镜像、创建容器、端口分配
+   ↓
+3. Running (运行中) - 服务可访问
+   ↓
+4. Idle (空闲) - 长期无访问，待清理
+   ↓
+5. Stopping (停止中) - 容器停止
+   ↓
+6. Stopped (已停止) - 资源释放
 ```
+
+**资源管理**:
+- 端口分配：动态分配 Gradio 端口（7860-7960 范围）
+- 资源限制：CPU、内存配额控制（默认 0.2 核 + 256Mi）
+- 配额管理：用户级别服务数量限制（默认最多 3 个）
+- 优先级调度：根据 `priority` 字段排序启动
+
+**健康监控**:
+- 定期检查：每 5 分钟检查一次（`ServiceScheduler`）
+- 健康端点：HTTP GET `/health` 或 TCP 端口检查
+- 失败重试：临时失败自动重试（最多 3 次）
+- 自动清理：空闲超过 30 分钟自动停止
+
+**失败处理**:
+- `failure_type` 分类：`temporary`（临时）、`permanent`（永久）、`unknown`
+- 智能重试：临时失败自动重试，永久失败标记禁用
+- 日志记录：完整的失败原因和操作日志（`ServiceLog`）
+
+---
+
+### 4. 外部服务集成
+
+#### 4.1 认证服务集成
+
+**集成方式**: JWT Token + 外部认证系统
+
+**认证流程**:
+```
+1. 用户在外部认证系统登录
+   ↓
+2. 获取 JWT Token 和用户信息
+   ↓
+3. GeoML-Hub 验证 Token 并同步用户信息
+   ↓
+4. 创建/更新本地用户记录 (users 表)
+   ↓
+5. 返回内部 Access Token
+```
+
+**Token 管理**:
+- Access Token: 短期有效（1 小时）
+- Refresh Token: 长期有效（7 天）
+- 自动刷新机制
+- Token 黑名单（登出）
+
+---
+
+#### 4.2 Docker 容器编排
+
+**集成目的**: 模型服务的容器化部署
+
+**使用场景**:
+- 模型推理服务部署（Gradio 应用）
+- 容器生命周期管理（创建、启动、停止、删除）
+- 资源限制配置（CPU、内存）
+- 网络端口映射（动态端口分配）
+
+**Docker API 使用**:
+```python
+# 创建容器
+client.containers.create(
+    image=image_name,
+    ports={'7860/tcp': host_port},
+    mem_limit='256m',
+    cpu_quota=20000  # 0.2 核
+)
+
+# 启动容器
+container.start()
+
+# 健康检查
+container.stats(stream=False)
+```
+
+---
+
+#### 4.3 Harbor 镜像仓库 (设计中)
+
+**集成目的**: 容器镜像管理
+
+**功能**:
+- 镜像存储与版本管理
+- 镜像漏洞扫描
+- 镜像签名验证
+- 镜像复制与同步
+
+---
+
+#### 4.4 MManager 资源管理器 (设计中)
+
+**集成目的**: 统一资源编排与监控
+
+**功能**:
+- 跨主机容器编排
+- 资源池管理
+- 负载均衡
+- 监控告警
+
+---
+
+### 5. 关键技术选型
+
+#### 5.1 后端技术栈
+
+| 技术 | 版本 | 用途 | 选型理由 |
+|------|------|------|---------|
+| **FastAPI** | 0.104+ | Web 框架 | 高性能、异步支持、自动文档生成 |
+| **SQLAlchemy** | 2.0+ | ORM | 异步 ORM、类型安全、成熟生态 |
+| **Pydantic** | 2.0+ | 数据验证 | 类型验证、序列化、文档生成 |
+| **PostgreSQL** | 14+ | 数据库 | ACID、全文搜索、JSON 支持 |
+| **Alembic** | 1.12+ | 数据库迁移 | 版本控制、自动迁移生成 |
+| **MinIO** | RELEASE.2023+ | 对象存储 | S3 兼容、高性能、自托管 |
+| **Boto3** | 1.28+ | S3 客户端 | MinIO 集成、预签名 URL |
+| **PyYAML** | 6.0+ | YAML 解析 | 元数据解析 |
+| **APScheduler** | 3.10+ | 定时任务 | 统计更新、健康检查 |
+| **Docker SDK** | 6.1+ | 容器管理 | 服务部署、资源管理 |
+
+---
+
+#### 5.2 前端技术栈
+
+| 技术 | 版本 | 用途 | 选型理由 |
+|------|------|------|---------|
+| **SvelteKit** | 1.20+ | 前端框架 | 高性能、轻量级、优秀 DX |
+| **TypeScript** | 5.0+ | 类型系统 | 类型安全、IDE 支持 |
+| **TailwindCSS** | 3.3+ | 样式框架 | 原子化 CSS、高度可定制 |
+| **CodeMirror** | 6.0+ | 代码编辑器 | 高性能、语法高亮、扩展性强 |
+| **Marked** | 9.0+ | Markdown 解析 | README 渲染 |
+| **Chart.js** | 4.0+ | 图表库 | 趋势图表展示 |
+| **Axios** | 1.5+ | HTTP 客户端 | API 请求封装 |
+
+---
+
+### 6. 架构设计模式
+
+#### 6.1 Repository Pattern (仓库模式)
+
+**应用**: 数据访问抽象
+
+**实现**:
+```python
+class RepositoryService:
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
+    async def get_by_id(self, repo_id: int) -> Repository:
+        # 数据访问逻辑
+        pass
+
+    async def create(self, data: RepositoryCreate) -> Repository:
+        # 创建逻辑
+        pass
+```
+
+**优势**:
+- 数据访问逻辑集中管理
+- 便于单元测试（Mock 数据库）
+- 业务逻辑与数据库解耦
+
+---
+
+#### 6.2 Dependency Injection (依赖注入)
+
+**应用**: FastAPI Depends 系统
+
+**实现**:
+```python
+async def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    db: AsyncSession = Depends(get_async_db)
+) -> User:
+    # 认证逻辑
+    pass
+
+@router.get("/me")
+async def get_me(current_user: User = Depends(get_current_user)):
+    return current_user
+```
+
+**优势**:
+- 松耦合
+- 易于测试
+- 代码复用
+
+---
+
+#### 6.3 Service Layer Pattern (服务层模式)
+
+**应用**: 业务逻辑封装
+
+**实现**:
+```python
+class RepositoryService:
+    async def star_repository(self, user_id: int, repo_id: int):
+        # 1. 检查是否已 Star
+        # 2. 创建 Star 记录
+        # 3. 更新仓库 stars_count
+        # 4. 发送通知（未来）
+        pass
+```
+
+**优势**:
+- 业务逻辑集中
+- 事务管理统一
+- 跨领域协调
+
+---
+
+#### 6.4 CQRS Lite (读写分离)
+
+**应用**: 统计数据架构
+
+**实现**:
+- **写操作**: `record_view()` → 直接更新 `RepositoryDailyStats`
+- **读操作**: 从预计算的时间窗口字段读取（`views_count_7d`）
+
+**优势**:
+- 读写性能优化
+- 查询复杂度降低
+- 扩展性更好
+
+---
+
+#### 6.5 Event-Driven Architecture (事件驱动)
+
+**应用**: 统计更新触发
+
+**实现**:
+```python
+# 用户访问 → 触发统计更新
+async def record_view(repo_id: int):
+    # 1. 更新总计
+    repository.views_count += 1
+
+    # 2. UPSERT 今日聚合
+    await upsert_daily_stats(repo_id, today, views=1)
+
+    # 3. 异步触发时间窗口更新（定时任务）
+```
+
+**优势**:
+- 解耦
+- 实时响应
+- 易于扩展
+
+---
+
+### 7. 性能优化策略
+
+#### 7.1 数据库优化
+
+- **索引优化**: 根据查询模式建立合适的索引（B-tree、GIN、复合索引）
+- **查询优化**: 使用 `selectinload` 避免 N+1 查询问题
+- **连接池**: 异步连接池管理，提高并发能力
+- **分页查询**: 限制单次返回数据量
+- **部分字段查询**: 只查询需要的字段（`select(User.id, User.username)`）
+
+#### 7.2 缓存策略
+
+- **应用层缓存**: 热点数据缓存（分类树、用户信息）
+- **数据库缓存**: PostgreSQL 查询缓存
+- **对象存储缓存**: MinIO 内置缓存 + CDN 加速
+
+#### 7.3 异步化
+
+- **全链路异步**: FastAPI + SQLAlchemy 2.0 + asyncio
+- **并发请求**: 异步处理多个请求
+- **后台任务**: APScheduler 异步执行定时任务
+
+#### 7.4 文件存储优化
+
+- **分块上传**: 大文件分块上传（5MB/块）
+- **预签名 URL**: 直接从 MinIO 下载，减轻后端压力
+- **CDN 加速**: 静态资源 CDN 分发
+
+---
+
+### 8. 安全架构
+
+#### 8.1 认证与授权
+
+- **JWT Token**: 无状态认证，支持水平扩展
+- **Token 刷新**: 自动刷新机制，减少登录频率
+- **权限控制**: 基于角色的访问控制（RBAC）
+- **API 密钥**: 支持程序化访问（未来）
+
+#### 8.2 数据安全
+
+- **SQL 注入防护**: ORM 参数化查询
+- **XSS 防护**: 前端输入验证 + 后端 HTML 转义
+- **CSRF 防护**: Token 验证
+- **文件上传安全**: 文件类型检查 + 病毒扫描（未来）
+
+#### 8.3 存储安全
+
+- **服务端加密**: MinIO 加密存储
+- **访问控制**: 预签名 URL 限时访问
+- **隐私保护**: 私有仓库访问控制
+
+---
+
+### 9. 可扩展性设计
+
+#### 9.1 水平扩展
+
+- **无状态后端**: FastAPI 实例可任意扩展
+- **数据库读写分离**: 支持主从复制（未来）
+- **对象存储分布式**: MinIO 集群部署（未来）
+- **负载均衡**: Nginx/Traefik 负载均衡（未来）
+
+#### 9.2 功能扩展
+
+- **插件化设计**: 认证、存储、通知可替换
+- **API 版本控制**: `/api/v1/`, `/api/v2/` 支持多版本
+- **微服务拆分**: 可按领域拆分为独立服务（未来）
+
+---
+
+### 10. 监控与运维
+
+#### 10.1 健康检查
+
+- **应用健康**: `/health` 端点
+- **数据库健康**: 连接检查
+- **MinIO 健康**: 存储可用性检查
+- **服务健康**: 模型服务定期检查
+
+#### 10.2 日志管理
+
+- **结构化日志**: JSON 格式日志
+- **日志分级**: DEBUG/INFO/WARNING/ERROR/CRITICAL
+- **服务日志**: `ServiceLog` 表记录操作日志
+
+#### 10.3 监控指标 (设计中)
+
+- **系统指标**: CPU、内存、磁盘、网络
+- **应用指标**: QPS、响应时间、错误率
+- **业务指标**: 用户数、仓库数、下载量
+
+---
+
+### 11. 总结
+
+GeoML-Hub v2.0 的系统架构经过精心设计，具备以下核心优势：
+
+✅ **现代化**: 采用最新技术栈，全面异步化，高性能
+✅ **可维护**: 清晰的分层架构，领域驱动设计，代码组织良好
+✅ **可扩展**: 松耦合设计，支持水平扩展和功能扩展
+✅ **高性能**: 数据库优化、缓存策略、异步并发，响应迅速
+✅ **安全可靠**: 完善的认证授权、数据安全、错误处理
+✅ **易用性**: RESTful API、自动文档、用户友好的前端
+
+通过参考业界最佳实践（GitHub、Hugging Face），结合地理科学领域特点，构建了一个专业、高效、易用的机器学习模型托管平台。
 
 ## 🗄️ 数据库架构 v2.0
 

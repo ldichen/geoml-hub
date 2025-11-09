@@ -63,18 +63,19 @@ from app.utils.logger import logger
 def _service_to_response_dict(service: ModelService) -> dict:
     """将服务对象转换为响应字典，安全处理image关系"""
     service_dict = service.__dict__.copy()
-    if hasattr(service, 'image') and service.image:
-        service_dict['image'] = {
-            'id': service.image.id,
-            'original_name': service.image.original_name,
-            'original_tag': service.image.original_tag,
-            'description': service.image.description,
-            'status': service.image.status
+    if hasattr(service, "image") and service.image:
+        service_dict["image"] = {
+            "id": service.image.id,
+            "original_name": service.image.original_name,
+            "original_tag": service.image.original_tag,
+            "description": service.image.description,
+            "status": service.image.status,
         }
     else:
-        service_dict['image'] = None
-    
+        service_dict["image"] = None
+
     return service_dict
+
 
 router = APIRouter()
 
@@ -174,9 +175,9 @@ async def get_service_with_permission(
         select(ModelService)
         .where(ModelService.id == service_id)
         .options(
-            selectinload(ModelService.repository), 
+            selectinload(ModelService.repository),
             selectinload(ModelService.user),
-            selectinload(ModelService.image)
+            selectinload(ModelService.image),
         )
     )
 
@@ -206,7 +207,7 @@ async def get_service_with_permission(
 
 
 # 服务管理API
-@router.get("/{username}/{repo_name}", response_model=ServiceListResponse)
+@router.get("/servicelists/{username}/{repo_name}", response_model=ServiceListResponse)
 async def list_repository_services(
     repository: Repository = Depends(get_repository_with_permission),
     page: int = Query(1, ge=1, description="页码"),
@@ -226,9 +227,11 @@ async def list_repository_services(
             logger.info("当前为游客用户")
 
         # 构建查询 - 对于游客，只显示公开服务
-        query = select(ModelService).options(
-            selectinload(ModelService.image)
-        ).where(ModelService.repository_id == repository.id)
+        query = (
+            select(ModelService)
+            .options(selectinload(ModelService.image))
+            .where(ModelService.repository_id == repository.id)
+        )
 
         # 如果是游客用户，只能看到公开服务
         if not current_user:
@@ -285,7 +288,7 @@ async def list_repository_services(
             ServiceResponse.model_validate(_service_to_response_dict(service))
             for service in services
         ]
-        
+
         response = ServiceListResponse(
             services=service_responses,
             total=total,
@@ -318,14 +321,16 @@ async def create_service_with_image(
     memory_limit: str = Form("2Gi", description="内存限制"),
     is_public: bool = Form(False, description="是否公开访问"),
     priority: int = Form(2, ge=0, le=3, description="启动优先级"),
-    examples_archive: Optional[UploadFile] = File(None, description="可选的examples目录压缩包"),
+    examples_archive: Optional[UploadFile] = File(
+        None, description="可选的examples目录压缩包"
+    ),
     current_user: User = Depends(get_current_user_required),
     db: AsyncSession = Depends(get_async_db),
 ):
     """基于已有镜像创建模型服务"""
 
     try:
-        # 获取仓库 
+        # 获取仓库
         repo_query = (
             select(Repository)
             .join(User, Repository.owner_id == User.id)
@@ -690,7 +695,6 @@ async def get_service_health_history(
     )
     total_result = await db.execute(total_query)
     total = total_result.scalar()
-
     checks_query = (
         select(ServiceHealthCheck)
         .where(ServiceHealthCheck.service_id == service.id)
@@ -701,7 +705,6 @@ async def get_service_health_history(
 
     checks_result = await db.execute(checks_query)
     checks = checks_result.scalars().all()
-
     return ServiceHealthCheckListResponse(
         checks=checks, total=total, page=page, size=size
     )

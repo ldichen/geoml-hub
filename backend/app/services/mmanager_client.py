@@ -419,26 +419,39 @@ class MManagerControllerManager:
                     )
                 )
 
+                # 立即提交成功的健康检查结果（独立事务）
+                await db.commit()
+
                 self.last_health_check[controller_id] = datetime.now()
+                logger.debug(f"控制器 {controller_id} 健康检查成功")
 
             except Exception as e:
+                # 回滚失败的事务，清理数据库会话状态
+                await db.rollback()
                 logger.warning(f"控制器 {controller_id} 健康检查失败: {e}")
 
-                # 更新失败状态
-                await db.execute(
-                    update(MManagerController)
-                    .where(MManagerController.controller_id == controller_id)
-                    .values(
-                        status="unhealthy",
-                        last_check_at=func.now(),
-                        error_message=str(e),
-                        consecutive_failures=MManagerController.consecutive_failures
-                        + 1,
-                        total_failures=MManagerController.total_failures + 1,
+                # 在新的干净事务中记录失败状态
+                try:
+                    await db.execute(
+                        update(MManagerController)
+                        .where(MManagerController.controller_id == controller_id)
+                        .values(
+                            status="unhealthy",
+                            last_check_at=func.now(),
+                            error_message=str(e),
+                            consecutive_failures=MManagerController.consecutive_failures
+                            + 1,
+                            total_failures=MManagerController.total_failures + 1,
+                        )
                     )
-                )
+                    # 提交失败记录（独立事务）
+                    await db.commit()
+                    logger.debug(f"控制器 {controller_id} 失败状态已记录")
 
-        await db.commit()
+                except Exception as db_error:
+                    # 如果记录失败状态也失败，再次回滚并记录错误
+                    await db.rollback()
+                    logger.error(f"控制器 {controller_id} 失败状态记录失败: {db_error}")
 
     async def sync_controllers(self, db: AsyncSession):
         """手动同步控制器配置"""

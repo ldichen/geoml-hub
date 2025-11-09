@@ -219,7 +219,6 @@ class ModelServiceManager:
             health_status=HealthStatus.UNKNOWN,
         )
 
-
         db.add(service)
         await db.commit()
         await db.refresh(service)
@@ -419,7 +418,6 @@ class ModelServiceManager:
             if service.container_id:
                 await self._remove_container_via_mmanager(db, service.container_id)
 
-
             # 删除数据库记录（级联删除相关表）
             await db.delete(service)
             await db.commit()
@@ -533,6 +531,45 @@ class ModelServiceManager:
                 "lines": 0,
             }
 
+    async def _get_container_resource_usage(
+        self, container_id: str
+    ) -> Dict[str, Any]:
+        """获取容器资源使用情况
+
+        Args:
+            container_id: 容器ID
+
+        Returns:
+            包含 CPU、内存等资源使用信息的字典
+        """
+        try:
+            # 创建临时数据库会话来查找容器位置
+            from app.database import get_async_db
+
+            async for db in get_async_db():
+                try:
+                    # 查找容器位置
+                    location = await mmanager_client.find_container_location(
+                        db, container_id
+                    )
+                    if not location:
+                        logger.warning(f"无法找到容器 {container_id} 的位置")
+                        return {}
+
+                    # 获取容器统计信息
+                    stats = await location["client"].get_container_stats(container_id)
+
+                    # 返回资源使用信息
+                    return stats.get("resource_usage", {}) if stats else {}
+
+                finally:
+                    await db.close()
+                    break
+
+        except Exception as e:
+            logger.error(f"获取容器 {container_id} 资源使用情况失败: {e}")
+            return {}
+
     # 私有方法
     async def _stop_container_via_mmanager(
         self,
@@ -631,7 +668,7 @@ class ModelServiceManager:
                 timeout = aiohttp.ClientTimeout(total=30)
 
                 async with aiohttp.ClientSession(timeout=timeout) as session:
-                    async with session.get(f"{service.service_url}/health") as response:
+                    async with session.get(f"{service.service_url}") as response:
                         response_time_ms = int((time.time() - start_time) * 1000)
 
                         if response.status == 200:
@@ -713,9 +750,11 @@ class ModelServiceManager:
     ) -> ModelService:
         """根据ID获取服务"""
 
-        service_query = select(ModelService).options(
-            selectinload(ModelService.image)
-        ).where(ModelService.id == service_id)
+        service_query = (
+            select(ModelService)
+            .options(selectinload(ModelService.image))
+            .where(ModelService.id == service_id)
+        )
 
         result = await db.execute(service_query)
         service = result.scalar_one_or_none()
@@ -728,17 +767,17 @@ class ModelServiceManager:
     def _service_to_response(self, service: ModelService) -> ServiceResponse:
         """将服务对象转换为响应对象，安全处理image关系"""
         service_dict = service.__dict__.copy()
-        if hasattr(service, 'image') and service.image:
-            service_dict['image'] = {
-                'id': service.image.id,
-                'original_name': service.image.original_name,
-                'original_tag': service.image.original_tag,
-                'description': service.image.description,
-                'status': service.image.status
+        if hasattr(service, "image") and service.image:
+            service_dict["image"] = {
+                "id": service.image.id,
+                "original_name": service.image.original_name,
+                "original_tag": service.image.original_tag,
+                "description": service.image.description,
+                "status": service.image.status,
             }
         else:
-            service_dict['image'] = None
-        
+            service_dict["image"] = None
+
         return ServiceResponse.model_validate(service_dict)
 
     def _generate_access_token(self) -> str:
@@ -807,7 +846,6 @@ class ModelServiceManager:
             return f"{memory_limit}m"
 
         return "512m"  # 默认值
-
 
     async def _log_service_event(
         self,
