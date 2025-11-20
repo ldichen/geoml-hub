@@ -16,6 +16,7 @@
   "devDependencies": {
     "@playwright/test": "^1.28.1",
     "@sveltejs/adapter-auto": "^2.0.0",
+    "@sveltejs/adapter-static": "^1.0.6",
     "@sveltejs/kit": "^1.20.4",
     "@tailwindcss/aspect-ratio": "^0.4.2",
     "@tailwindcss/forms": "^0.5.6",
@@ -64,6 +65,6 @@
     "lucide-svelte": "^0.292.0",
     "marked": "^9.1.6",
     "prismjs": "^1.30.0",
-    "svelte-i18n": "^3.7.0"
+    "svelte-i18n": "^4.0.1"
   }
 }

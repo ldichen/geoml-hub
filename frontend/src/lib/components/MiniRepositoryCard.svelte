@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { Star, Download, Eye } from 'lucide-svelte';
 	import { formatDistanceToNow } from 'date-fns';
-	import { zhCN } from 'date-fns/locale';
+	import zhCN from 'date-fns/locale/zh-CN/index.js';
+	import { base } from '$app/paths';
 	import type { Repository, User } from '$lib/types';
 
 	export let repo: Repository;
@@ -16,7 +17,7 @@
 </script>
 
 <a
-	href="/{repo.owner?.username || 'unknown'}/{repo.name}"
+	href="{base}/{repo.owner?.username || 'unknown'}/{repo.name}"
 	class="mini-repository-card group block rounded-lg border border-gray-200 dark:border-gray-700 p-3 transition-all duration-200"
 >
 	<!-- Repository Name -->

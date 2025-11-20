@@ -1,5 +1,6 @@
 <script>
 	import { page } from '$app/stores';
+	import { base } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/utils/api.js';
@@ -197,7 +198,7 @@
 			<div class="flex items-center justify-between">
 				<div>
 					<nav class="flex items-center space-x-2 text-sm text-gray-600 mb-2">
-						<a href="/{username}/{repositoryName}" class="hover:text-blue-600">
+						<a href="{base}/{username}/{repositoryName}" class="hover:text-blue-600">
 							{repositoryName}
 						</a>
 						<span>/</span>
@@ -316,9 +317,9 @@
 				<p class="text-gray-600 mb-4">
 					开始编辑文件时会自动创建草稿，您也可以手动保存草稿。
 				</p>
-				<Button 
+				<Button
 					variant="primary"
-					on:click={() => goto(`/${username}/${repositoryName}`)}
+					on:click={() => goto(`${base}/${username}/${repositoryName}`)}
 				>
 					浏览文件
 				</Button>
@@ -413,7 +414,7 @@
 										<Button
 											variant="outline"
 											size="sm"
-											on:click={() => goto(`/${username}/${repositoryName}/blob/${draft.file?.file_path}`)}
+											on:click={() => goto(`${base}/${username}/${repositoryName}/blob/${draft.file?.file_path}`)}
 										>
 											👁 查看原文件
 										</Button>

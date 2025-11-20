@@ -4,6 +4,7 @@
     import { login as authLogin, isLoading } from '$lib/stores/auth.js';
     import { redirectIfAuthenticated } from '$lib/utils/auth.js';
     import { api } from '$lib/utils/api.js';
+    import { PATHS } from '$lib/utils/paths.js';
     import { _ } from 'svelte-i18n';
     
     let email = '';
@@ -13,7 +14,7 @@
     
     onMount(() => {
         // 如果已登录，重定向到首页
-        redirectIfAuthenticated('/');
+        redirectIfAuthenticated(PATHS.HOME);
     });
     
     async function handleLogin() {
@@ -34,7 +35,7 @@
                 authLogin(response.data.access_token, response.data.user, response.data.refresh_token);
 
                 // 重定向到原来想访问的页面或首页
-                const redirectTo = new URLSearchParams(window.location.search).get('redirect') || '/';
+                const redirectTo = new URLSearchParams(window.location.search).get('redirect') || PATHS.HOME;
                 goto(redirectTo);
             } else {
                 error = response.error || 'Login failed';
@@ -158,7 +159,7 @@
                 <!-- 其他选项 -->
                 <div class="flex items-center justify-between">
                     <div class="text-sm">
-                        <a href="/forgot-password" class="font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400">
+                        <a href="{PATHS.HOME}/forgot-password" class="font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400">
                             {$_('auth.forgot_password')}
                         </a>
                     </div>
@@ -181,7 +182,7 @@
                 <div class="mt-6 text-center">
                     <p class="text-sm text-gray-600 dark:text-gray-400">
                         {$_('auth.no_account')}
-                        <a href="/register" class="font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400">
+                        <a href={PATHS.REGISTER} class="font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400">
                             {$_('auth.sign_up')}
                         </a>
                     </p>

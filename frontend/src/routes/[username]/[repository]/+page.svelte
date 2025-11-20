@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
+	import { base } from '$app/paths';
 	import { onMount } from 'svelte';
 	import {
 		Star,
@@ -20,7 +21,7 @@
 		X
 	} from 'lucide-svelte';
 	import { formatDistanceToNow } from 'date-fns';
-	import { zhCN } from 'date-fns/locale';
+	import zhCN from 'date-fns/locale/zh-CN/index.js';
 	import { marked } from 'marked';
 	import { _ } from 'svelte-i18n';
 	import { api } from '$lib/utils/api';
@@ -970,7 +971,7 @@
 			await api.deleteRepository(username, repoName);
 			alert('仓库删除成功');
 			// 重定向到用户页面
-			window.location.href = `/${username}`;
+			window.location.href = `${base}/${username}`;
 		} catch (error) {
 			console.error('Delete repository failed:', error);
 			alert(`删除仓库失败：${error.message}`);
@@ -1476,7 +1477,7 @@
 										<div class="flex items-center">
 											<UserAvatar user={repository.owner} size="sm" />
 											<a
-												href="/{repository.owner?.username}"
+												href="{base}/{repository.owner?.username}"
 												class="text-gray-600 text-xl font-semibold font-mono ml-3 truncate dark:text-blue-300 hover:text-blue-700 dark:hover:text-blue-200"
 											>
 												{repository.owner?.username}
@@ -2065,7 +2066,7 @@
 																	<FileText class="h-5 w-5 text-gray-400" />
 																	<div class="flex items-center space-x-3">
 																		<a
-																			href="/{username}/{repoName}/blob/{file.path}"
+																			href="{base}/{username}/{repoName}/blob/{file.path}"
 																			class="text-sm font-medium text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400"
 																		>
 																			{file.name}
@@ -2085,14 +2086,14 @@
 																</div>
 																<div class="flex flex-[4] items-center justify-end space-x-2">
 																	<a
-																		href="/{username}/{repoName}/blob/{file.path}"
+																		href="{base}/{username}/{repoName}/blob/{file.path}"
 																		class="text-blue-600 dark:text-blue-400 hover:underline text-sm"
 																	>
 																		查看
 																	</a>
 																	{#if $currentUser && repository.owner?.username === $currentUser.username}
 																		<a
-																			href="/{username}/{repoName}/edit/{file.path}"
+																			href="{base}/{username}/{repoName}/edit/{file.path}"
 																			class="text-green-600 dark:text-green-400 hover:underline text-sm"
 																		>
 																			编辑
@@ -2120,7 +2121,7 @@
 													<FileText class="h-5 w-5 text-gray-400" />
 													<div class="flex items-center space-x-3">
 														<a
-															href="/{username}/{repoName}/blob/{item.path}"
+															href="{base}/{username}/{repoName}/blob/{item.path}"
 															class="text-sm font-medium text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400"
 														>
 															{item.name}
@@ -2140,14 +2141,14 @@
 												</div>
 												<div class="flex flex-[4.5] items-center justify-end space-x-2">
 													<a
-														href="/{username}/{repoName}/blob/{item.path}"
+														href="{base}/{username}/{repoName}/blob/{item.path}"
 														class="text-blue-600 dark:text-blue-400 hover:underline text-sm"
 													>
 														查看
 													</a>
 													{#if $currentUser && repository.owner?.username === $currentUser.username}
 														<a
-															href="/{username}/{repoName}/edit/{item.path}"
+															href="{base}/{username}/{repoName}/edit/{item.path}"
 															class="text-green-600 dark:text-green-400 hover:underline text-sm"
 														>
 															编辑

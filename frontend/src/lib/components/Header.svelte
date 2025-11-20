@@ -1,6 +1,7 @@
 <script>
 	import { onMount } from 'svelte';
 	import { locale, _ } from 'svelte-i18n';
+	import { base } from '$app/paths';
 	import {
 		Search,
 		Globe,
@@ -16,6 +17,7 @@
 	} from 'lucide-svelte';
 	import { user, isAuthenticated, logout } from '$lib/stores/auth';
 	import { api } from '$lib/utils/api';
+	import { PATHS } from '$lib/utils/paths';
 	import UserAvatar from './UserAvatar.svelte';
 
 	export let theme = 'light';
@@ -90,8 +92,8 @@
 		<div class="flex items-center justify-between h-16">
 			<!-- Logo -->
 			<div class="flex items-center">
-				<a href="/" class="flex items-center space-x-3">
-					<img src="/logo.png" alt="GeoML Hub" class="h-12 object-contain" />
+				<a href={PATHS.HOME} class="flex items-center space-x-3">
+					<img src="{base}/logo.png" alt="GeoML Hub" class="h-12 object-contain" />
 					<div class="hidden sm:block">
 						<h1 class="text-xl font-bold text-white">
 							{$_('app.name')}
@@ -165,14 +167,14 @@
 							>
 								<div class="py-1">
 									<a
-										href="/{$user.username}"
+										href={PATHS.user($user.username)}
 										class="flex items-center space-x-3 px-4 py-2 text-sm text-white hover:bg-gray-700 transition-colors"
 									>
 										<User class="w-4 h-4" />
 										<span>个人主页</span>
 									</a>
 									<a
-										href="/new"
+										href={PATHS.NEW_REPO}
 										class="flex items-center space-x-3 px-4 py-2 text-sm text-white hover:bg-gray-700 transition-colors"
 									>
 										<Plus class="w-4 h-4" />
@@ -180,7 +182,7 @@
 									</a>
 									{#if $user.is_admin}
 										<a
-											href="/admin"
+											href={PATHS.ADMIN}
 											class="flex items-center space-x-3 px-4 py-2 text-sm text-white hover:bg-gray-700 transition-colors"
 										>
 											<Settings class="w-4 h-4" />
@@ -203,13 +205,13 @@
 					<!-- Login/Register Buttons -->
 					<div class="flex items-center space-x-2">
 						<a
-							href="/login"
+							href={PATHS.LOGIN}
 							class="px-4 py-2 text-sm font-medium text-white hover:text-primary-300 transition-colors"
 						>
 							登录
 						</a>
 						<a
-							href="/register"
+							href={PATHS.REGISTER}
 							class="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-md transition-colors"
 						>
 							注册
@@ -236,16 +238,16 @@
 			<div class="md:hidden border-t border-gray-600 py-4">
 				<div class="flex flex-col space-y-2">
 					{#if $isAuthenticated && $user}
-						<a href="/new" class="block px-3 py-2 text-white hover:bg-gray-700 rounded-md">
+						<a href={PATHS.NEW_REPO} class="block px-3 py-2 text-white hover:bg-gray-700 rounded-md">
 							新建仓库
 						</a>
 						{#if $user.is_admin}
-							<a href="/admin" class="block px-3 py-2 text-white hover:bg-gray-700 rounded-md">
+							<a href={PATHS.ADMIN} class="block px-3 py-2 text-white hover:bg-gray-700 rounded-md">
 								管理控制台
 							</a>
 						{/if}
 						<a
-							href="/{$user.username}"
+							href={PATHS.user($user.username)}
 							class="block px-3 py-2 text-white hover:bg-gray-700 rounded-md"
 						>
 							个人主页
@@ -257,11 +259,11 @@
 							退出登录
 						</button>
 					{:else}
-						<a href="/login" class="block px-3 py-2 text-white hover:bg-gray-700 rounded-md">
+						<a href={PATHS.LOGIN} class="block px-3 py-2 text-white hover:bg-gray-700 rounded-md">
 							登录
 						</a>
 						<a
-							href="/register"
+							href={PATHS.REGISTER}
 							class="block px-3 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-md"
 						>
 							注册

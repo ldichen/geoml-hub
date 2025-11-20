@@ -1,9 +1,9 @@
 import { s as subscribe } from "../../../chunks/utils.js";
 import { c as create_ssr_component, v as validate_component, e as escape } from "../../../chunks/ssr.js";
 import { p as page } from "../../../chunks/stores.js";
-import "../../../chunks/runtime.esm.js";
+import "../../../chunks/runtime.js";
 /* empty css                                                            */import { L as Loading } from "../../../chunks/Loading.js";
-import { u as user } from "../../../chunks/auth.js";
+import { user } from "../../../chunks/auth.js";
 const UserProfile_svelte_svelte_type_style_lang = "";
 const css = {
   code: ".bg-gray-50.svelte-1v5vq1c{background-color:#f9fafb}",
@@ -30,7 +30,7 @@ const Page = create_ssr_component(($$result, $$props, $$bindings, slots) => {
   currentUser = $user;
   $$unsubscribe_user();
   $$unsubscribe_page();
-  return `${$$result.head += `<!-- HEAD_svelte-mc3r8t_START -->${$$result.title = `<title>@${escape(username)} - GeoML Hub</title>`, ""}<meta name="description" content="${"查看 @" + escape(username, true) + " 在 GeoML Hub 上的个人资料和仓库"}"><!-- HEAD_svelte-mc3r8t_END -->`, ""} ${validate_component(UserProfile, "UserProfile").$$render($$result, { username, currentUser }, {}, {})}`;
+  return `${$$result.head += `<!-- HEAD_svelte-ehn6az_START -->${$$result.title = `<title>@${escape(username)} - GeoML Hub</title>`, ""}<meta name="description" content="${"查看 @" + escape(username, true) + " 在 GeoML Hub 上的个人资料和仓库"}"><!-- HEAD_svelte-ehn6az_END -->`, ""} ${validate_component(UserProfile, "UserProfile").$$render($$result, { username, currentUser }, {}, {})}`;
 });
 export {
   Page as default

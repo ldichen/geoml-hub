@@ -1,5 +1,6 @@
 <script>
   import { _ } from 'svelte-i18n';
+  import { base } from '$app/paths';
   import { Github, Mail, ExternalLink } from 'lucide-svelte';
 </script>
 
@@ -10,7 +11,7 @@
         <!-- About -->
         <div class="col-span-1 md:col-span-2">
           <div class="flex items-center space-x-3 mb-4">
-            <img src="/logo.png" alt="GeoML Hub" class="h-12 object-contain" />
+            <img src="{base}/logo.png" alt="GeoML Hub" class="h-12 object-contain" />
             <div>
               <h3 class="text-lg font-semibold text-white">
                 {$_('app.name')}

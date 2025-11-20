@@ -1,6 +1,7 @@
 <script>
     import { onMount } from 'svelte';
     import { page } from '$app/stores';
+    import { base } from '$app/paths';
     import { goto } from '$app/navigation';
     import { _ } from 'svelte-i18n';
     import { Search, Filter, Grid, List, SortAsc, SortDesc } from 'lucide-svelte';
@@ -106,8 +107,8 @@
         if (filters.repo_type) params.set('repo_type', filters.repo_type);
         if (filters.sort_by !== 'relevance') params.set('sort', filters.sort_by);
         if (filters.order !== 'desc') params.set('order', filters.order);
-        
-        goto(`/search?${params.toString()}`, { replaceState: true });
+
+        goto(`${base}/search?${params.toString()}`, { replaceState: true });
     }
     
     function handleFilterChange() {
@@ -329,7 +330,7 @@
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {#each users as user}
-                        <a href="/{user.username}" class="block">
+                        <a href="{base}/{user.username}" class="block">
                             <div class="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-6 hover:shadow-md transition-shadow">
                                 <div class="flex items-center space-x-4">
                                     <UserAvatar {user} size="lg" />

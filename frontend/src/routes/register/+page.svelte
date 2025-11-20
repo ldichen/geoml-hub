@@ -4,6 +4,7 @@
     import { login as authLogin } from '$lib/stores/auth.js';
     import { redirectIfAuthenticated } from '$lib/utils/auth.js';
     import { api } from '$lib/utils/api.js';
+    import { PATHS } from '$lib/utils/paths.js';
     import { _ } from 'svelte-i18n';
     
     let formData = {
@@ -23,7 +24,7 @@
     
     onMount(() => {
         // 如果已登录，重定向到首页
-        redirectIfAuthenticated('/');
+        redirectIfAuthenticated(PATHS.HOME);
     });
     
     function validateStep1() {
@@ -92,7 +93,7 @@
             if (response.success) {
                 // 注册成功，自动登录
                 authLogin(response.data.access_token, response.data.user, response.data.refresh_token);
-                goto('/');
+                goto(PATHS.HOME);
             } else {
                 error = response.error || $_('auth.registration_failed');
             }
@@ -366,7 +367,7 @@
                 <div class="mt-6 text-center">
                     <p class="text-sm text-gray-600 dark:text-gray-400">
                         {$_('auth.already_have_account')}
-                        <a href="/login" class="font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400">
+                        <a href={PATHS.LOGIN} class="font-medium text-primary-600 hover:text-primary-500 dark:text-primary-400">
                             {$_('auth.login')}
                         </a>
                     </p>

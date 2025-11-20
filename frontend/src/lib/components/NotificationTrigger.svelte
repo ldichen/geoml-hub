@@ -3,6 +3,7 @@
     import { goto } from '$app/navigation';
     import { Bell } from 'lucide-svelte';
     import { api } from '$lib/utils/api.js';
+    import { PATHS } from '$lib/utils/paths.js';
     import { user } from '$lib/stores/auth.js';
     import NotificationCenter from './NotificationCenter.svelte';
     
@@ -61,10 +62,10 @@
     
     function toggleNotifications() {
         if (!$user) {
-            goto('/login');
+            goto(PATHS.LOGIN);
             return;
         }
-        
+
         isOpen = !isOpen;
     }
     

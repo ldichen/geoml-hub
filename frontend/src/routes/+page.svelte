@@ -421,9 +421,10 @@
 				<div class="p-2">
 					<!-- Tabs Navigation -->
 					<div class="border-b border-gray-200 dark:border-gray-700 mb-6">
-						<nav class="flex space-x-6" aria-label="Tabs">
+						<nav class="flex w-full" aria-label="Tabs">
 							<button
-								class="py-2 px-1 border-b-2 font-semibold text-m {activeTab === 'main'
+								class="flex-1 py-2 px-0.5 sm:px-1 border-b-2 font-semibold text-sm {activeTab ===
+								'main'
 									? 'border-blue-500 text-blue-600 dark:text-blue-400'
 									: 'border-transparent text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300'}"
 								on:click={() => (activeTab = 'main')}
@@ -431,7 +432,8 @@
 								Main
 							</button>
 							<button
-								class="py-2 px-1 border-b-2 font-semibold text-m {activeTab === 'class'
+								class="flex-1 py-2 px-0.5 sm:px-1 border-b-2 font-semibold text-sm {activeTab ===
+								'class'
 									? 'border-blue-500 text-blue-600 dark:text-blue-400'
 									: 'border-transparent text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300'}"
 								on:click={() => (activeTab = 'class')}
@@ -439,7 +441,8 @@
 								Class
 							</button>
 							<button
-								class="py-2 px-1 border-b-2 font-semibold text-m {activeTab === 'tasks'
+								class="flex-1 py-2 px-0.5 sm:px-1 border-b-2 font-semibold text-sm {activeTab ===
+								'tasks'
 									? 'border-blue-500 text-blue-600 dark:text-blue-400'
 									: 'border-transparent text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300'}"
 								on:click={() => (activeTab = 'tasks')}
@@ -447,7 +450,8 @@
 								Tasks
 							</button>
 							<button
-								class="py-2 px-1 border-b-2 font-semibold text-m {activeTab === 'tags'
+								class="flex-1 py-2 px-0.5 sm:px-1 border-b-2 font-semibold text-sm {activeTab ===
+								'tags'
 									? 'border-blue-500 text-blue-600 dark:text-blue-400'
 									: 'border-transparent text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300'}"
 								on:click={() => (activeTab = 'tags')}
@@ -455,7 +459,8 @@
 								Libraries
 							</button>
 							<button
-								class="py-2 px-1 border-b-2 font-semibold text-m {activeTab === 'licenses'
+								class="flex-1 py-2 px-0.5 sm:px-1 border-b-2 font-semibold text-sm {activeTab ===
+								'licenses'
 									? 'border-blue-500 text-blue-600 dark:text-blue-400'
 									: 'border-transparent text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300'}"
 								on:click={() => (activeTab = 'licenses')}
@@ -1425,9 +1430,10 @@
 
 					<!-- Trending Tabs Navigation -->
 					<div class="border-b border-gray-200 dark:border-gray-700 mb-6">
-						<nav class="flex space-x-6" aria-label="Trending Tabs">
+						<nav class="flex space-x-2 sm:space-x-4 lg:space-x-6" aria-label="Trending Tabs">
 							<button
-								class="py-2 px-1 border-b-2 font-medium text-sm {trendingTab === 'featured'
+								class="py-2 px-0.5 sm:px-1 border-b-2 font-medium text-xs sm:text-sm {trendingTab ===
+								'featured'
 									? 'border-blue-500 text-blue-600 dark:text-blue-400'
 									: 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}"
 								on:click={() => handleTrendingTabChange('featured')}
@@ -1435,7 +1441,8 @@
 								精选
 							</button>
 							<button
-								class="py-2 px-1 border-b-2 font-medium text-sm {trendingTab === 'trending'
+								class="py-2 px-0.5 sm:px-1 border-b-2 font-medium text-xs sm:text-sm {trendingTab ===
+								'trending'
 									? 'border-blue-500 text-blue-600 dark:text-blue-400'
 									: 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}"
 								on:click={() => handleTrendingTabChange('trending')}
@@ -1443,7 +1450,8 @@
 								热门
 							</button>
 							<button
-								class="py-2 px-1 border-b-2 font-medium text-sm {trendingTab === 'latest'
+								class="py-2 px-0.5 sm:px-1 border-b-2 font-medium text-xs sm:text-sm {trendingTab ===
+								'latest'
 									? 'border-blue-500 text-blue-600 dark:text-blue-400'
 									: 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}"
 								on:click={() => handleTrendingTabChange('latest')}
@@ -1451,7 +1459,8 @@
 								最新
 							</button>
 							<button
-								class="py-2 px-1 border-b-2 font-medium text-sm {trendingTab === 'recommended'
+								class="py-2 px-0.5 sm:px-1 border-b-2 font-medium text-xs sm:text-sm {trendingTab ===
+								'recommended'
 									? 'border-blue-500 text-blue-600 dark:text-blue-400'
 									: 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}"
 								on:click={() => handleTrendingTabChange('recommended')}

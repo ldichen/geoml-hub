@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { Star, Download, Eye, GitFork, Calendar, Lock, ChevronRight } from 'lucide-svelte';
 	import { formatDistanceToNow } from 'date-fns';
-	import { zhCN } from 'date-fns/locale';
+	import zhCN from 'date-fns/locale/zh-CN/index.js';
+	import { base } from '$app/paths';
 	import type { Repository, User } from '$lib/types';
 	import UserAvatar from './UserAvatar.svelte';
 	import SocialButton from './SocialButton.svelte';
@@ -60,7 +61,7 @@
 				{/if}
 
 				<a
-					href="/{repo.owner?.username || 'unknown'}/{repo.name}"
+					href="{base}/{repo.owner?.username || 'unknown'}/{repo.name}"
 					class="text-lg font-mono text-black truncate group-hover:text-blue-500 transition-colors"
 				>
 					{repo.name}

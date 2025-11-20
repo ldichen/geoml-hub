@@ -1,67 +1,89 @@
 {
 	"/": [
+		"src/routes/+page.js",
 		"src/routes/+layout.js",
 		"src/routes/+layout.js"
 	],
 	"/admin": [
+		"src/routes/admin/+layout.js",
 		"src/routes/+layout.js",
+		"src/routes/admin/+layout.js",
 		"src/routes/+layout.js"
 	],
 	"/admin/classifications": [
+		"src/routes/admin/+layout.js",
 		"src/routes/+layout.js"
 	],
 	"/admin/dashboard": [
+		"src/routes/admin/+layout.js",
 		"src/routes/+layout.js"
 	],
 	"/admin/repositories": [
+		"src/routes/admin/+layout.js",
 		"src/routes/+layout.js"
 	],
 	"/admin/settings": [
+		"src/routes/admin/+layout.js",
 		"src/routes/+layout.js"
 	],
 	"/admin/storage": [
+		"src/routes/admin/+layout.js",
 		"src/routes/+layout.js"
 	],
 	"/admin/system": [
+		"src/routes/admin/+layout.js",
 		"src/routes/+layout.js"
 	],
 	"/admin/users": [
+		"src/routes/admin/+layout.js",
 		"src/routes/+layout.js"
 	],
 	"/login": [
+		"src/routes/login/+page.js",
 		"src/routes/+layout.js"
 	],
 	"/new": [
+		"src/routes/new/+page.js",
 		"src/routes/+layout.js"
 	],
 	"/register": [
+		"src/routes/register/+page.js",
 		"src/routes/+layout.js"
 	],
 	"/search": [
+		"src/routes/search/+page.js",
 		"src/routes/+layout.js"
 	],
 	"/trending": [
+		"src/routes/trending/+page.js",
 		"src/routes/+layout.js"
 	],
 	"/[username]": [
+		"src/routes/[username]/+page.js",
 		"src/routes/+layout.js"
 	],
 	"/[username]/[repository]": [
+		"src/routes/[username]/[repository]/+page.js",
 		"src/routes/+layout.js"
 	],
 	"/[username]/[repository]/blob/[...file_path]": [
+		"src/routes/[username]/[repository]/blob/[...file_path]/+page.js",
 		"src/routes/+layout.js"
 	],
 	"/[username]/[repository]/commits/[...file_path]": [
+		"src/routes/[username]/[repository]/commits/[...file_path]/+page.js",
 		"src/routes/+layout.js"
 	],
 	"/[username]/[repository]/drafts": [
+		"src/routes/[username]/[repository]/drafts/+page.js",
 		"src/routes/+layout.js"
 	],
 	"/[username]/[repository]/edit/[...file_path]": [
+		"src/routes/[username]/[repository]/edit/[...file_path]/+page.js",
 		"src/routes/+layout.js"
 	],
 	"/[username]/[repository]/upload": [
+		"src/routes/[username]/[repository]/upload/+page.js",
 		"src/routes/+layout.js"
 	]
 }

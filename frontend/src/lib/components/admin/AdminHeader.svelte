@@ -2,13 +2,14 @@
     import { onMount } from 'svelte';
     import { goto } from '$app/navigation';
     import { api } from '$lib/utils/api.js';
+    import { PATHS } from '$lib/utils/paths.js';
 
     export let user = null;
-    
+
     async function handleLogout() {
         try {
             await api.auth.logout();
-            await goto('/');
+            await goto(PATHS.HOME);
         } catch (err) {
             console.error('Logout error:', err);
         }

@@ -4,6 +4,7 @@
 	import { LICENSE_OPTIONS } from '$lib/utils/constants';
 	import { api } from '$lib/utils/api';
 	import { user as currentUser } from '$lib/stores/auth.js';
+	import { PATHS } from '$lib/utils/paths.js';
 	import Loading from '$lib/components/Loading.svelte';
 	import ClassificationSelector from '$lib/components/ClassificationSelector.svelte';
 	import { ErrorHandler, getUserFriendlyMessage } from '$lib/utils/error-handler.js';
@@ -242,7 +243,7 @@
 			}
 
 			// Success - redirect to repository page
-			goto(`/${$currentUser.username}/${response.name}`);
+			goto(PATHS.repo($currentUser.username, response.name));
 		} catch (err) {
 			// 使用统一错误处理器
 			const apiError = ErrorHandler.handleApiError(err, {
@@ -834,7 +835,7 @@
 					<button
 						type="button"
 						class="w-full sm:w-auto px-5 py-2 border border-slate-300/70 dark:border-slate-600 rounded-2xl text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all duration-200 font-semibold shadow-sm hover:shadow-md"
-						on:click={() => goto('/')}
+						on:click={() => goto(PATHS.HOME)}
 					>
 						取消
 					</button>

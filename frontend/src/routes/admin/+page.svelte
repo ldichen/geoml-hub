@@ -1,10 +1,11 @@
 <script>
     import { onMount } from 'svelte';
     import { goto } from '$app/navigation';
+    import { PATHS } from '$lib/utils/paths.js';
 
     onMount(() => {
         // 管理员首页重定向到仪表板
-        goto('/admin/dashboard');
+        goto(`${PATHS.ADMIN}/dashboard`);
     });
 </script>
 

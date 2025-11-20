@@ -6,11 +6,11 @@ function __memo(fn) {
 
 return {
 	appDir: "_app",
-	appPath: "_app",
-	assets: new Set([".DS_Store","favicon.ico","logo_dark.png","logo_light.png"]),
+	appPath: "geoml-hub/_app",
+	assets: new Set([".DS_Store","favicon.ico","logo.png","logo_light.png"]),
 	mimeTypes: {".png":"image/png"},
 	_: {
-		client: null,
+		client: {"start":"_app/immutable/entry/start.493b5206.js","app":"_app/immutable/entry/app.9deaeeba.js","imports":["_app/immutable/entry/start.493b5206.js","_app/immutable/chunks/scheduler.cc6cbc02.js","_app/immutable/chunks/singletons.434e14c9.js","_app/immutable/entry/app.9deaeeba.js","_app/immutable/chunks/preload-helper.a4192956.js","_app/immutable/chunks/scheduler.cc6cbc02.js","_app/immutable/chunks/index.cf161fb4.js"],"stylesheets":[],"fonts":[]},
 		nodes: [
 			__memo(() => import('./nodes/0.js')),
 			__memo(() => import('./nodes/1.js')),
@@ -34,7 +34,8 @@ return {
 			__memo(() => import('./nodes/19.js')),
 			__memo(() => import('./nodes/20.js')),
 			__memo(() => import('./nodes/21.js')),
-			__memo(() => import('./nodes/22.js'))
+			__memo(() => import('./nodes/22.js')),
+			__memo(() => import('./nodes/23.js'))
 		],
 		routes: [
 			{
@@ -52,80 +53,87 @@ return {
 				endpoint: null
 			},
 			{
+				id: "/admin/classifications",
+				pattern: /^\/admin\/classifications\/?$/,
+				params: [],
+				page: { layouts: [0,2,], errors: [1,,], leaf: 12 },
+				endpoint: null
+			},
+			{
 				id: "/admin/dashboard",
 				pattern: /^\/admin\/dashboard\/?$/,
 				params: [],
-				page: { layouts: [0,2,], errors: [1,,], leaf: 12 },
+				page: { layouts: [0,2,], errors: [1,,], leaf: 13 },
 				endpoint: null
 			},
 			{
 				id: "/admin/repositories",
 				pattern: /^\/admin\/repositories\/?$/,
 				params: [],
-				page: { layouts: [0,2,], errors: [1,,], leaf: 13 },
+				page: { layouts: [0,2,], errors: [1,,], leaf: 14 },
 				endpoint: null
 			},
 			{
 				id: "/admin/settings",
 				pattern: /^\/admin\/settings\/?$/,
 				params: [],
-				page: { layouts: [0,2,], errors: [1,,], leaf: 14 },
+				page: { layouts: [0,2,], errors: [1,,], leaf: 15 },
 				endpoint: null
 			},
 			{
 				id: "/admin/storage",
 				pattern: /^\/admin\/storage\/?$/,
 				params: [],
-				page: { layouts: [0,2,], errors: [1,,], leaf: 15 },
+				page: { layouts: [0,2,], errors: [1,,], leaf: 16 },
 				endpoint: null
 			},
 			{
 				id: "/admin/system",
 				pattern: /^\/admin\/system\/?$/,
 				params: [],
-				page: { layouts: [0,2,], errors: [1,,], leaf: 16 },
+				page: { layouts: [0,2,], errors: [1,,], leaf: 17 },
 				endpoint: null
 			},
 			{
 				id: "/admin/users",
 				pattern: /^\/admin\/users\/?$/,
 				params: [],
-				page: { layouts: [0,2,], errors: [1,,], leaf: 17 },
+				page: { layouts: [0,2,], errors: [1,,], leaf: 18 },
 				endpoint: null
 			},
 			{
 				id: "/login",
 				pattern: /^\/login\/?$/,
 				params: [],
-				page: { layouts: [0,], errors: [1,], leaf: 18 },
+				page: { layouts: [0,], errors: [1,], leaf: 19 },
 				endpoint: null
 			},
 			{
 				id: "/new",
 				pattern: /^\/new\/?$/,
 				params: [],
-				page: { layouts: [0,], errors: [1,], leaf: 19 },
+				page: { layouts: [0,], errors: [1,], leaf: 20 },
 				endpoint: null
 			},
 			{
 				id: "/register",
 				pattern: /^\/register\/?$/,
 				params: [],
-				page: { layouts: [0,], errors: [1,], leaf: 20 },
+				page: { layouts: [0,], errors: [1,], leaf: 21 },
 				endpoint: null
 			},
 			{
 				id: "/search",
 				pattern: /^\/search\/?$/,
 				params: [],
-				page: { layouts: [0,], errors: [1,], leaf: 21 },
+				page: { layouts: [0,], errors: [1,], leaf: 22 },
 				endpoint: null
 			},
 			{
 				id: "/trending",
 				pattern: /^\/trending\/?$/,
 				params: [],
-				page: { layouts: [0,], errors: [1,], leaf: 22 },
+				page: { layouts: [0,], errors: [1,], leaf: 23 },
 				endpoint: null
 			},
 			{

@@ -5,6 +5,7 @@ import { goto } from '$app/navigation';
 import { PUBLIC_API_BASE_URL } from '$env/static/public';
 import { dev } from '$app/environment';
 import { ErrorHandler, parseApiError, getUserFriendlyMessage } from './error-handler.js';
+import { PATHS } from './paths.js';
 
 // 环境适配：开发环境使用代理，生产环境使用完整URL
 const API_BASE_URL = dev ? '' : PUBLIC_API_BASE_URL || 'http://localhost:8000';
@@ -98,7 +99,7 @@ class ApiClient {
 					if (browser) {
 						const { logout } = await import('$lib/stores/auth.js');
 						logout();
-						goto('/login');
+						goto(PATHS.LOGIN);
 					}
 
 					// 创建统一的认证错误
@@ -136,7 +137,7 @@ class ApiClient {
 			if (ErrorHandler.needsReauth(apiError)) {
 				this.clearToken();
 				if (browser) {
-					goto('/login');
+					goto(PATHS.LOGIN);
 				}
 			}
 
@@ -187,7 +188,7 @@ class ApiClient {
 								localStorage.removeItem('refreshToken');
 								const { logout } = await import('$lib/stores/auth.js');
 								logout();
-								goto('/login');
+								goto(PATHS.LOGIN);
 							}
 							reject(new Error('Authentication required'));
 						}
@@ -266,7 +267,7 @@ class ApiClient {
 	// ================== Authentication API ==================
 	async mockExternalAuth(email, password) {
 		try {
-			const response = await this.request('/api/auth/mock-external-auth/', {
+			const response = await this.request('/api/auth/mock-external-auth', {
 				method: 'POST',
 				body: { email, password }
 			});
@@ -278,7 +279,7 @@ class ApiClient {
 
 	async login(externalToken) {
 		try {
-			const response = await this.request('/api/auth/login/', {
+			const response = await this.request('/api/auth/login', {
 				method: 'POST',
 				body: { external_token: externalToken }
 			});
@@ -293,7 +294,7 @@ class ApiClient {
 
 	async register(email, password, username = null, fullName = null) {
 		try {
-			const response = await this.request('/api/auth/register/', {
+			const response = await this.request('/api/auth/register', {
 				method: 'POST',
 				body: {
 					email,
@@ -313,7 +314,7 @@ class ApiClient {
 
 	async loginWithCredentials(email, password) {
 		try {
-			const response = await this.request('/api/auth/login/credentials/', {
+			const response = await this.request('/api/auth/login/credentials', {
 				method: 'POST',
 				body: { email, password }
 			});
@@ -328,7 +329,7 @@ class ApiClient {
 
 	async verify() {
 		try {
-			const response = await this.request('/api/auth/verify/', {
+			const response = await this.request('/api/auth/verify', {
 				method: 'POST'
 			});
 			return { success: true, data: response };
@@ -339,7 +340,7 @@ class ApiClient {
 
 	async logout() {
 		try {
-			await this.request('/api/auth/logout/', {
+			await this.request('/api/auth/logout', {
 				method: 'POST',
 				body: { token: this.getToken() }
 			});
@@ -487,7 +488,7 @@ class ApiClient {
 	}
 
 	async createRepository(data) {
-		return this.request('/api/repositories/', {
+		return this.request('/api/repositories', {
 			method: 'POST',
 			body: data
 		});
@@ -846,7 +847,7 @@ class ApiClient {
 	}
 
 	async markAllNotificationsAsRead() {
-		return this.request('/api/notifications/read-all/', {
+		return this.request('/api/notifications/read-all', {
 			method: 'POST'
 		});
 	}

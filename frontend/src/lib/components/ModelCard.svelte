@@ -1,12 +1,13 @@
 <script>
   import { _ } from 'svelte-i18n';
   import { Eye, Download, Heart, Calendar, User, Building } from 'lucide-svelte';
-  
+  import { base } from '$app/paths';
+
   export let model;
   export let compact = false;
   export let hideThumb = false;
   export let trendingMode = false;
-  
+
   function formatDate(dateString) {
     const date = new Date(dateString);
     return date.toLocaleDateString('zh-CN', {
@@ -15,13 +16,13 @@
       day: 'numeric'
     });
   }
-  
+
   function handleCardClick() {
     // v2.0: Navigate to /{username}/{repository} pattern
     if (model.owner && model.name) {
-      window.location.href = `/${model.owner.username}/${model.name}`;
+      window.location.href = `${base}/${model.owner.username}/${model.name}`;
     } else if (model.full_name) {
-      window.location.href = `/${model.full_name}`;
+      window.location.href = `${base}/${model.full_name}`;
     } else {
       console.warn('Model card: Invalid model data, missing owner/name information');
     }

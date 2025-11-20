@@ -2,6 +2,7 @@ import { get } from 'svelte/store';
 import { isAuthenticated, user, authToken, logout } from '$lib/stores/auth.js';
 import { goto } from '$app/navigation';
 import { browser } from '$app/environment';
+import { PATHS } from './paths.js';
 
 /**
  * 检查用户是否已认证
@@ -20,7 +21,7 @@ export function getCurrentUser() {
 /**
  * 需要认证的路由保护
  */
-export function requireAuth(redirectTo = '/login') {
+export function requireAuth(redirectTo = PATHS.LOGIN) {
     if (!checkAuth()) {
         goto(redirectTo);
         return false;
@@ -31,7 +32,7 @@ export function requireAuth(redirectTo = '/login') {
 /**
  * 需要管理员权限
  */
-export function requireAdmin(redirectTo = '/') {
+export function requireAdmin(redirectTo = PATHS.HOME) {
     const currentUser = getCurrentUser();
     if (!checkAuth() || !currentUser?.is_admin) {
         goto(redirectTo);
@@ -55,7 +56,7 @@ export function isOwner(resourceOwner) {
 /**
  * 重定向已认证用户
  */
-export function redirectIfAuthenticated(redirectTo = '/') {
+export function redirectIfAuthenticated(redirectTo = PATHS.HOME) {
     if (checkAuth()) {
         goto(redirectTo);
         return true;

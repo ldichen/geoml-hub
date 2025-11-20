@@ -1,8 +1,8 @@
 import { s as subscribe } from "../../../../../../chunks/utils.js";
 import { c as create_ssr_component, o as onDestroy, e as escape, v as validate_component } from "../../../../../../chunks/ssr.js";
 import { p as page } from "../../../../../../chunks/stores.js";
-import { u as user } from "../../../../../../chunks/auth.js";
-import "../../../../../../chunks/runtime.esm.js";
+import { user } from "../../../../../../chunks/auth.js";
+import "../../../../../../chunks/runtime.js";
 import { B as Button } from "../../../../../../chunks/Button.js";
 import { L as Loading } from "../../../../../../chunks/Loading.js";
 const EditorToolbar_svelte_svelte_type_style_lang = "";
@@ -11,7 +11,7 @@ const EditorSidebar_svelte_svelte_type_style_lang = "";
 const FileEditor_svelte_svelte_type_style_lang = "";
 const _page_svelte_svelte_type_style_lang = "";
 const css = {
-  code: ".file-edit-page.svelte-1km4msp{background:#f8f9fa}.metadata-block .yaml-key{color:#9cdcfe;font-weight:600}.metadata-block .yaml-value{color:#ce9178}.metadata-block .yaml-comment{color:#6a9955;font-style:italic}.metadata-block{box-shadow:0 1px 3px rgba(0, 0, 0, 0.1)}.metadata-block pre{margin:0;line-height:1.4}",
+  code: ".file-edit-page.svelte-1bueyq{background:#f8f9fa}.metadata-block .yaml-key{color:#9cdcfe;font-weight:600}.metadata-block .yaml-value{color:#ce9178}.metadata-block .yaml-comment{color:#6a9955;font-style:italic}.metadata-block{box-shadow:0 1px 3px rgba(0, 0, 0, 0.1)}.metadata-block pre{margin:0;line-height:1.4}",
   map: null
 };
 const Page = create_ssr_component(($$result, $$props, $$bindings, slots) => {
@@ -32,7 +32,7 @@ const Page = create_ssr_component(($$result, $$props, $$bindings, slots) => {
   $page.params.file_path;
   $$unsubscribe_currentUser();
   $$unsubscribe_page();
-  return `${$$result.head += `<!-- HEAD_svelte-1tvqyyz_START -->${$$result.title = `<title>编辑 ${escape("文件")} - ${escape(repositoryName)} - GeoML-Hub</title>`, ""}<!-- HEAD_svelte-1tvqyyz_END -->`, ""} ${``} <div class="file-edit-page h-screen flex flex-col svelte-1km4msp"> ${``}  <div class="bg-white border-b border-gray-200"> ${` <div class="container px-4 py-2 flex items-center justify-between"><div class="flex items-center space-x-4"><div class="text-sm text-gray-600" data-svelte-h="svelte-1wm5ki3">编辑模式</div>  ${``}</div> <div class="flex items-center space-x-2">${validate_component(Button, "Button").$$render($$result, { variant: "outline", size: "sm" }, {}, {
+  return `${$$result.head += `<!-- HEAD_svelte-1tvqyyz_START -->${$$result.title = `<title>编辑 ${escape("文件")} - ${escape(repositoryName)} - GeoML-Hub</title>`, ""}<!-- HEAD_svelte-1tvqyyz_END -->`, ""} ${``} <div class="file-edit-page h-screen flex flex-col svelte-1bueyq"> ${``}  <div class="bg-white border-b border-gray-200"> ${` <div class="container px-4 py-2 flex items-center justify-between"><div class="flex items-center space-x-4"><div class="text-sm text-gray-600" data-svelte-h="svelte-1uht4ne">编辑模式</div>  ${``} </div> <div class="flex items-center space-x-2">${validate_component(Button, "Button").$$render($$result, { variant: "outline", size: "sm" }, {}, {
     default: () => {
       return `返回`;
     }

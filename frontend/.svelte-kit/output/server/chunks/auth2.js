@@ -1,5 +1,5 @@
 import { g as get_store_value } from "./utils.js";
-import { u as user } from "./auth.js";
+import { user } from "./auth.js";
 function getCurrentUser() {
   return get_store_value(user);
 }

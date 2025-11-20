@@ -1,5 +1,6 @@
 <script>
   import { User } from 'lucide-svelte';
+  import { base } from '$app/paths';
 
   export let user = null;
   export let size = 'md';
@@ -75,7 +76,7 @@
   <!-- Avatar -->
   <div class="relative">
     {#if clickable && user}
-      <a href="/{user.username}" class="block">
+      <a href="{base}/{user.username}" class="block">
         <div class="relative {sizeClasses} rounded-lg overflow-hidden bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
           {#if user?.avatar_url && !imageError}
             <!-- 图片加载状态管理 -->

@@ -1,6 +1,6 @@
 import { s as subscribe } from "./utils.js";
 import { c as create_ssr_component, e as escape } from "./ssr.js";
-import { $ as $format } from "./runtime.esm.js";
+import { $ as $format } from "./runtime.js";
 const Loading = create_ssr_component(($$result, $$props, $$bindings, slots) => {
   let sizeClasses;
   let textSizeClasses;

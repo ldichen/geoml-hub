@@ -2,7 +2,7 @@
  * @Author: DiChen
  * @Date: 2025-07-26 15:58:59
  * @LastEditors: DiChen
- * @LastEditTime: 2025-10-10 15:31:28
+ * @LastEditTime: 2025-11-12 15:56:53
  */
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig, loadEnv } from 'vite';

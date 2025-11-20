@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { api } from '$lib/utils/api.js';
+	import { PATHS } from '$lib/utils/paths.js';
 
 	let user = null;
 	let loading = true;
@@ -15,31 +16,31 @@
 
 			// Check if user is admin
 			if (!user.is_admin) {
-				await goto('/login');
+				await goto(PATHS.LOGIN);
 				return;
 			}
 
 			loading = false;
 		} catch (err) {
 			error = err.message;
-			await goto('/login');
+			await goto(PATHS.LOGIN);
 		}
 	});
 
 	const sidebarItems = [
-		{ path: '/admin/dashboard', label: '仪表板', icon: 'dashboard' },
-		{ path: '/admin/users', label: '用户管理', icon: 'users' },
-		{ path: '/admin/repositories', label: '仓库管理', icon: 'repositories' },
-		{ path: '/admin/classifications', label: '分类管理', icon: 'classifications' },
-		{ path: '/admin/storage', label: '存储管理', icon: 'storage' },
-		{ path: '/admin/system', label: '系统监控', icon: 'system' },
-		{ path: '/admin/settings', label: '系统设置', icon: 'settings' }
+		{ path: `${PATHS.ADMIN}/dashboard`, label: '仪表板', icon: 'dashboard' },
+		{ path: `${PATHS.ADMIN}/users`, label: '用户管理', icon: 'users' },
+		{ path: `${PATHS.ADMIN}/repositories`, label: '仓库管理', icon: 'repositories' },
+		{ path: `${PATHS.ADMIN}/classifications`, label: '分类管理', icon: 'classifications' },
+		{ path: `${PATHS.ADMIN}/storage`, label: '存储管理', icon: 'storage' },
+		{ path: `${PATHS.ADMIN}/system`, label: '系统监控', icon: 'system' },
+		{ path: `${PATHS.ADMIN}/settings`, label: '系统设置', icon: 'settings' }
 	];
 
 	async function handleLogout() {
 		try {
 			await api.logout();
-			await goto('/');
+			await goto(PATHS.HOME);
 		} catch (err) {
 			console.error('Logout error:', err);
 		}

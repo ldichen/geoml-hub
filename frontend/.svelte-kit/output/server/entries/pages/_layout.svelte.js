@@ -1,9 +1,9 @@
 import { s as subscribe } from "../../chunks/utils.js";
 import { c as create_ssr_component } from "../../chunks/ssr.js";
 import "../../chunks/index2.js";
-import "../../chunks/runtime.esm.js";
+import "../../chunks/runtime.js";
 import { w as writable } from "../../chunks/index.js";
-import { a as authToken } from "../../chunks/auth.js";
+import { authToken } from "../../chunks/auth.js";
 const app = "";
 const theme = writable("light");
 const ToastContainer_svelte_svelte_type_style_lang = "";

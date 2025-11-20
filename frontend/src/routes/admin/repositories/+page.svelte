@@ -1,5 +1,6 @@
 <script>
     import { onMount } from 'svelte';
+    import { base } from '$app/paths';
     import { api } from '$lib/utils/api.js';
 
     let repositories = [];
@@ -421,7 +422,7 @@
                                         />
                                         <div>
                                             <a
-                                                href="/{repo.owner?.username || 'unknown'}/{repo.name}"
+                                                href="{base}/{repo.owner?.username || 'unknown'}/{repo.name}"
                                                 class="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
                                             >
                                                 {repo.owner?.username || 'unknown'}/{repo.name}

@@ -1,7 +1,8 @@
 import { s as subscribe } from "../../../../../chunks/utils.js";
 import { c as create_ssr_component, e as escape, v as validate_component } from "../../../../../chunks/ssr.js";
 import { p as page } from "../../../../../chunks/stores.js";
-import "../../../../../chunks/runtime.esm.js";
+import { b as base } from "../../../../../chunks/paths.js";
+import "../../../../../chunks/runtime.js";
 import { B as Button } from "../../../../../chunks/Button.js";
 import { L as Loading } from "../../../../../chunks/Loading.js";
 const DraftManager_svelte_svelte_type_style_lang = "";
@@ -28,7 +29,7 @@ const Page = create_ssr_component(($$result, $$props, $$bindings, slots) => {
     totalSize: userDrafts.reduce((sum, d) => sum + new TextEncoder().encode(d.draft_content || "").length, 0)
   };
   $$unsubscribe_page();
-  return `${$$result.head += `<!-- HEAD_svelte-1fc3bsc_START -->${$$result.title = `<title>草稿管理 - ${escape(repositoryName)} - GeoML-Hub</title>`, ""}<!-- HEAD_svelte-1fc3bsc_END -->`, ""} ${``} <div class="drafts-page svelte-pq7omz"> ${``}  <div class="bg-white border-b border-gray-200"><div class="container mx-auto px-4 py-6"><div class="flex items-center justify-between"><div><nav class="flex items-center space-x-2 text-sm text-gray-600 mb-2"><a href="${"/" + escape(username, true) + "/" + escape(repositoryName, true)}" class="hover:text-blue-600">${escape(repositoryName)}</a> <span data-svelte-h="svelte-ocknwt">/</span> <span class="text-blue-600 font-medium" data-svelte-h="svelte-1sqwzow">草稿管理</span></nav> <h1 class="text-2xl font-bold text-gray-900" data-svelte-h="svelte-1li02j4">草稿管理</h1> <p class="text-gray-600 mt-1" data-svelte-h="svelte-713ivd">管理您在此仓库中的所有草稿文件</p></div> <div class="flex items-center space-x-2">${validate_component(Button, "Button").$$render(
+  return `${$$result.head += `<!-- HEAD_svelte-1fc3bsc_START -->${$$result.title = `<title>草稿管理 - ${escape(repositoryName)} - GeoML-Hub</title>`, ""}<!-- HEAD_svelte-1fc3bsc_END -->`, ""} ${``} <div class="drafts-page svelte-pq7omz"> ${``}  <div class="bg-white border-b border-gray-200"><div class="container mx-auto px-4 py-6"><div class="flex items-center justify-between"><div><nav class="flex items-center space-x-2 text-sm text-gray-600 mb-2"><a href="${escape(base, true) + "/" + escape(username, true) + "/" + escape(repositoryName, true)}" class="hover:text-blue-600">${escape(repositoryName)}</a> <span data-svelte-h="svelte-ocknwt">/</span> <span class="text-blue-600 font-medium" data-svelte-h="svelte-1sqwzow">草稿管理</span></nav> <h1 class="text-2xl font-bold text-gray-900" data-svelte-h="svelte-1li02j4">草稿管理</h1> <p class="text-gray-600 mt-1" data-svelte-h="svelte-713ivd">管理您在此仓库中的所有草稿文件</p></div> <div class="flex items-center space-x-2">${validate_component(Button, "Button").$$render(
     $$result,
     {
       variant: "outline",

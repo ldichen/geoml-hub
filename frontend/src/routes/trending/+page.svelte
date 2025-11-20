@@ -4,6 +4,7 @@
     import { _ } from 'svelte-i18n';
     import { TrendingUp, Calendar, Filter, Star, Download, Eye } from 'lucide-svelte';
     import { api } from '$lib/utils/api.js';
+    import { PATHS } from '$lib/utils/paths.js';
     import RepositoryCard from '$lib/components/RepositoryCard.svelte';
     import Loading from '$lib/components/Loading.svelte';
     
@@ -191,7 +192,7 @@
             <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
                 {$_('search.showing_top_trending')} {getPeriodDisplay(period)}
             </p>
-            <a href="/search?sort=stars&order=desc" class="btn btn-secondary">
+            <a href="{PATHS.SEARCH}?sort=stars&order=desc" class="btn btn-secondary">
                 {$_('search.view_all_repositories')}
             </a>
         </div>
@@ -206,10 +207,10 @@
                 {$_('search.no_trending_hint')}
             </p>
             <div class="flex justify-center space-x-4">
-                <a href="/search" class="btn btn-primary">
+                <a href={PATHS.SEARCH} class="btn btn-primary">
                     {$_('search.explore_repositories')}
                 </a>
-                <a href="/" class="btn btn-secondary">
+                <a href={PATHS.HOME} class="btn btn-secondary">
                     {$_('navigation.home')}
                 </a>
             </div>
